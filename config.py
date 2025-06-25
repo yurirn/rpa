@@ -27,7 +27,10 @@ SELECTORS = {
     'data_nascimento': "dataNascmentoDoPacienteFluxo",
     'idade': "idadeDoPacienteFluxo",
     'celular': "telefone",
-    'nome_nascimento': "nomeNascimento"
+    'nome_nascimento': "nomeNascimento",
+
+    'cep': "cep"
+
 }
 
 # URLs e padrões para verificação de login

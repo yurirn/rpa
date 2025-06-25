@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 from config import CHROME_OPTIONS, SELECTORS, LOGIN_SUCCESS_PATTERNS, LOGIN_FAIL_PATTERNS, TIMEOUTS, PATIENT_NAME
+from viacep_client import buscar_endereco
 
 class WebAutomation:
     def __init__(self, gui_interface):
@@ -220,8 +221,24 @@ class WebAutomation:
 
             self.gui.log_message(f"✓ Telefone inserido no campo", "success")
 
+            self.gui.log_message("→ Adicionando informações do endereço", "info")
+            dados_endereco = buscar_endereco("PR", "Londrina", "Rua Cesar de Oliveira Bertin")
+            for item in dados_endereco:
+                anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, "input#cep + a.table-editable-ancora")
+                    )
+                )
+                anchor.click()
 
-            # Adicionar Api do ViaCep e preencher campos do endereço
+                cep = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.visibility_of_element_located((By.ID, SELECTORS['cep']))
+                )
+
+                cep.clear()
+                cep.send_keys(dados_endereco[0]["cep"]) 
+                
+            
 
         except Exception as e:
             self.gui.log_message(f"✗ Erro ao criar paciente: {str(e)}", "error")
