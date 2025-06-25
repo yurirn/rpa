@@ -61,18 +61,15 @@ class AutomationSystem:
     def handle_login_process(self, credentials):
         """Gerencia o processo de login (automático ou manual)"""
         if credentials['auto_login']:
-            # Tentar login automático
             success = self.web_automation.perform_auto_login(
                 credentials['username'], 
                 credentials['password']
             )
             
             if not success:
-                # Se falhou, aguardar login manual
                 return self.web_automation.wait_manual_login()
             return success
         else:
-            # Login manual apenas
             return self.web_automation.wait_manual_login()
             
     def execute_post_login_actions(self):
@@ -80,7 +77,6 @@ class AutomationSystem:
         self.gui.update_status("Executando automação...", "blue")
         self.gui.log_message("=== INICIANDO AUTOMAÇÃO ===", "info")
         
-        # Criar novo exame
         self.web_automation.create_new_exam()
         
         self.gui.update_status("Automação concluída", "green")

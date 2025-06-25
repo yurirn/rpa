@@ -37,26 +37,22 @@ class WebAutomation:
             self.gui.update_status("Fazendo login automático...", "orange")
             self.gui.log_message("=== LOGIN AUTOMÁTICO ===", "info")
             
-            # Aguardar campos de login
             user_field = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.presence_of_element_located((By.ID, SELECTORS['username_field']))
             )
             pass_field = self.driver.find_element(By.ID, SELECTORS['password_field'])
             
-            # Preencher campos
             user_field.clear()
             user_field.send_keys(username)
             time.sleep(1)
             pass_field.clear()
             pass_field.send_keys(password)
             
-            # Buscar botão de login
             login_button = self.driver.find_element(By.XPATH, SELECTORS['login_button'])
             login_button.click()
             
             self.gui.log_message("✓ Credenciais enviadas", "success")
             
-            # Aguardar redirecionamento
             time.sleep(TIMEOUTS['login_redirect'])
             if self.check_login_success():
                 self.gui.log_message("✓ Login automático realizado!", "success")
@@ -102,29 +98,39 @@ class WebAutomation:
             return any(success_indicators) and not any(login_indicators)
         except:
             return False
+        
+    def is_initial_screen(self):
+        """Verifica se está na tela inicial onde tem o botão de criar exame"""
+        try:
+            create_button = self.driver.find_element(By.XPATH, SELECTORS['create_exam_button'])
+            return create_button.is_displayed()
+        except:
+            return False
             
     def create_new_exam(self):
         """Processo completo de criação de exame"""
         try:
             self.gui.log_message("→ Iniciando criação de exame", "info")
             
-            # Primeiro botão
-            first_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
-                EC.element_to_be_clickable((By.XPATH, SELECTORS['create_exam_button']))
-            )
-            first_button.click()
-            self.gui.log_message("✓ Primeiro botão clicado", "success")
-            
-            # Segundo botão (modal)
-            time.sleep(TIMEOUTS['page_load'])
-            modal_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
-                EC.presence_of_element_located((By.XPATH, SELECTORS['modal_create_button']))
-            )
-            self.driver.execute_script("arguments[0].click();", modal_button)
-            self.gui.log_message("✓ Botão do modal clicado", "success")
+            if self.is_initial_screen():
+                self.gui.log_message("✓ Na tela inicial - clicando nos botões", "info")
+                
+                first_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.element_to_be_clickable((By.XPATH, SELECTORS['create_exam_button']))
+                )
+                first_button.click()
+                self.gui.log_message("✓ Primeiro botão clicado", "success")
+                
+                time.sleep(TIMEOUTS['page_load'])
+                modal_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.presence_of_element_located((By.XPATH, SELECTORS['modal_create_button']))
+                )
+                self.driver.execute_script("arguments[0].click();", modal_button)
+                self.gui.log_message("✓ Botão do modal clicado", "success")
+            else:
+                self.gui.log_message("✓ Já está na tela de exame - pulando botões", "success")
             
             self.search_patient()
-
             self.create_patient()
 
             
@@ -151,7 +157,7 @@ class WebAutomation:
             self.driver.execute_script("arguments[0].click();", consult_button)
             self.gui.log_message("✓ Botão consultar clicado via JavaScript", "success")
             
-            time.sleep(TIMEOUTS['search_result'])  # Aguardar resultado da busca
+            time.sleep(TIMEOUTS['search_result']) 
             self.gui.log_message("✓ Busca de paciente realizada", "success")
 
             create_patient = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
@@ -221,7 +227,6 @@ class WebAutomation:
 
             self.gui.log_message(f"✓ Telefone inserido no campo", "success")
 
-            self.gui.log_message("→ Adicionando informações do endereço", "info")
             dados_endereco = buscar_endereco("PR", "Londrina", "Rua Cesar de Oliveira Bertin")
             for item in dados_endereco:
                 anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
@@ -237,7 +242,10 @@ class WebAutomation:
 
                 cep.clear()
                 cep.send_keys(dados_endereco[0]["cep"]) 
-                
+
+                self.driver.execute_script("arguments[0].blur();", cep)
+
+            self.gui.log_message(f"✓ Cep informado", "success")  
             
 
         except Exception as e:
