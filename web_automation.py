@@ -1,11 +1,12 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 import time
 from config import CHROME_OPTIONS, SELECTORS, LOGIN_SUCCESS_PATTERNS, LOGIN_FAIL_PATTERNS, TIMEOUTS, PATIENT_NAME
 from viacep_client import buscar_endereco
+import traceback
 
 class WebAutomation:
     def __init__(self, gui_interface):
@@ -114,7 +115,7 @@ class WebAutomation:
             
             if self.is_initial_screen():
                 self.gui.log_message("✓ Na tela inicial - clicando nos botões", "info")
-                
+            
                 first_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                     EC.element_to_be_clickable((By.XPATH, SELECTORS['create_exam_button']))
                 )
@@ -122,8 +123,11 @@ class WebAutomation:
                 self.gui.log_message("✓ Primeiro botão clicado", "success")
                 
                 time.sleep(TIMEOUTS['page_load'])
+                
+                self.select_exam_type()
+                
                 modal_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
-                    EC.presence_of_element_located((By.XPATH, SELECTORS['modal_create_button']))
+                   EC.presence_of_element_located((By.XPATH, SELECTORS['modal_create_button']))
                 )
                 self.driver.execute_script("arguments[0].click();", modal_button)
                 self.gui.log_message("✓ Botão do modal clicado", "success")
@@ -134,8 +138,35 @@ class WebAutomation:
             self.create_patient()
 
             
+        except Exception as e:         
+            tb = traceback.format_exc()
+            self.gui.log_message(f"✗ Erro ao criar exame: {str(e)}\n{tb}", "error")
+
+    def select_exam_type(self):
+        """Seleciona o tipo de exame no modal"""
+        try:
+            self.gui.log_message("→ Selecionando tipo de exame", "info")
+        
+            # Aguarda o modal aparecer
+            time.sleep(3)
+            
+            # Encontra o select usando o seletor que funcionou
+            exam_select_element = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "form#formCriarNovoExame select"))
+            )
+            
+            # Usa JavaScript para selecionar diretamente
+            self.driver.execute_script("""
+                arguments[0].value = '175';
+                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            """, exam_select_element)
+            
+            self.gui.log_message("✓ Tipo de exame selecionado: AN - Anátomo Patológico", "success")
+            time.sleep(1)
+        
         except Exception as e:
-            self.gui.log_message(f"✗ Erro ao criar exame: {str(e)}", "error")
+            tb = traceback.format_exc()
+            self.gui.log_message(f"✗ Erro ao selecionar tipo de exame: {str(e)}\n{tb}", "error")
 
     def search_patient(self):
         """Busca paciente pelo nome"""
