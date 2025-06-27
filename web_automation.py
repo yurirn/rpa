@@ -147,15 +147,12 @@ class WebAutomation:
         try:
             self.gui.log_message("→ Selecionando tipo de exame", "info")
         
-            # Aguarda o modal aparecer
             time.sleep(3)
             
-            # Encontra o select usando o seletor que funcionou
             exam_select_element = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "form#formCriarNovoExame select"))
             )
             
-            # Usa JavaScript para selecionar diretamente
             self.driver.execute_script("""
                 arguments[0].value = '175';
                 arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
