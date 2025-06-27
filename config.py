@@ -23,6 +23,7 @@ SELECTORS = {
     'patient_search_field': "pacienteSearch",
     'consult_button': "consultarPaciente",
     'create_patient': "criarPaciente",
+    'patient_selected': "usarPacienteSelecionado",
 
     'data_nascimento': "dataNascmentoDoPacienteFluxo",
     'idade': "idadeDoPacienteFluxo",
@@ -52,7 +53,7 @@ TIMEOUTS = {
 }
 
 # Nome do paciente (configurável)
-PATIENT_NAME = "Yuri Rodrigues"  # ← ALTERE ESTE VALOR CONFORME NECESSÁRIO
+PATIENT_NAME = "Yuri Rodrigues Mendes"  
 
 # Cores para logs
 LOG_COLORS = {

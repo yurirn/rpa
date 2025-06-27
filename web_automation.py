@@ -134,9 +134,12 @@ class WebAutomation:
             else:
                 self.gui.log_message("✓ Já está na tela de exame - pulando botões", "success")
             
-            self.search_patient()
-            self.create_patient()
+            patient_found = self.search_patient()
 
+            if not patient_found:
+                self.create_patient()
+            else:
+                self.gui.log_message("✓ Usando paciente existente selecionado", "success")
             
         except Exception as e:         
             tb = traceback.format_exc()
@@ -188,19 +191,85 @@ class WebAutomation:
             time.sleep(TIMEOUTS['search_result']) 
             self.gui.log_message("✓ Busca de paciente realizada", "success")
 
-            create_patient = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
-                EC.presence_of_element_located((By.ID, SELECTORS['create_patient']))
-            )
+            if self.check_existing_patient():
+                self.gui.log_message("✓ Paciente encontrado na tabela - selecionando", "success")
+                return True
+            else:
+                self.gui.log_message("→ Paciente não encontrado - criando novo", "info")
+                
+                create_patient = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.presence_of_element_located((By.ID, SELECTORS['create_patient']))
+                )
 
-            time.sleep(TIMEOUTS['search_result']) 
-            self.driver.execute_script("arguments[0].click();", create_patient)
-            self.gui.log_message("✓ Botão criar paciente clicado via Javascript", "success")
+                time.sleep(TIMEOUTS['search_result']) 
+                self.driver.execute_script("arguments[0].click();", create_patient)
+                self.gui.log_message("✓ Botão criar paciente clicado via Javascript", "success")
 
-            time.sleep(TIMEOUTS['search_result'])
-
+                time.sleep(TIMEOUTS['search_result'])
+                return False
             
         except Exception as e:
-            self.gui.log_message(f"✗ Erro ao buscar paciente: {str(e)}", "error")
+            tb = traceback.format_exc()
+            self.gui.log_message(f"✗ Erro ao buscar paciente: {str(e)}\n{tb}", "error")
+            return False
+
+    def check_existing_patient(self):
+        """Verifica se o paciente já existe na tabela de resultados"""
+        try:
+            self.gui.log_message("→ Verificando se paciente já existe na tabela...", "info")
+        
+            time.sleep(2)
+            
+            table_rows = self.driver.find_elements(By.CSS_SELECTOR, "#formPacienteId table tbody tr")
+            self.gui.log_message(table_rows)
+            
+            if not table_rows:
+                self.gui.log_message("→ Nenhuma linha encontrada na tabela", "info")
+                return False
+            
+            expected_birth_date = "10/10/1990" 
+            
+            for row in table_rows:
+                try:
+                    name_element = row.find_element(By.CSS_SELECTOR, "td:nth-child(2) span")
+                    patient_name = name_element.text.strip().upper()
+                    self.gui.log_message(patient_name)
+
+                    birth_date_element = row.find_element(By.CSS_SELECTOR, "td:nth-child(5)")
+                    birth_date = birth_date_element.text.strip()
+                    self.gui.log_message(birth_date)
+                    
+                    self.gui.log_message(f"→ Verificando: {patient_name} - {birth_date}", "info")
+                    
+                    if (PATIENT_NAME.upper() in patient_name and birth_date == expected_birth_date):
+                        
+                        radio_button = row.find_element(By.CSS_SELECTOR, "input[type='radio'].pacienteId")
+                        self.driver.execute_script("arguments[0].click();", radio_button)
+
+                        self.gui.log_message(radio_button)
+                        
+                        patient_id = radio_button.get_attribute("value")
+                        self.gui.log_message(f"✓ Paciente encontrado e selecionado - ID: {patient_id}", "success")
+                        self.gui.log_message(f"✓ Nome: {patient_name} | Data: {birth_date}", "success")
+
+                        patient_selected = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                            EC.presence_of_element_located((By.ID, SELECTORS['patient_selected']))
+                        )
+                        self.driver.execute_script("arguments[0].click();", patient_selected)
+                        self.gui.log_message("✓ Botão Utilizar paciente selecionado clicado via JavaScript", "success")
+                        
+                        return True
+                        
+                except Exception as e:
+                    continue
+            
+            self.gui.log_message("→ Paciente não encontrado na tabela de resultados", "info")
+            return False
+            
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.gui.log_message(f"✗ Erro ao verificar paciente existente: {str(e)}\n{tb}", "error")
+            return False
 
     def create_patient(self):
         """Cria paciente"""
