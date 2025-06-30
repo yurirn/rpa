@@ -143,9 +143,11 @@ class WebAutomation:
             else:
                 self.gui.log_message("✓ Já está na tela de exame - pulando botões", "success")
             
-            if not self.is_patient_screen():
+            if not self.is_patient_screen():    
                 patient_found = self.search_patient()
-                self.create_patient()
+                self.gui.log_message(patient_found, "success")
+                if not patient_found:
+                    self.create_patient()
             else:
                 self.gui.log_message("✓ Usando paciente existente selecionado", "success")
             
@@ -168,7 +170,7 @@ class WebAutomation:
             )
 
             valor_anchor = anchor.text.strip()
-            if valor_anchor.lower == "vazio":
+            if valor_anchor == "Vazio":
                 anchor.click()
 
                 convenioInput = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
@@ -179,8 +181,7 @@ class WebAutomation:
                 convenioInput.send_keys("UNIMED (LONDRINA)") 
                 time.sleep(0.5)
                 convenioInput.send_keys(Keys.ENTER)   
-                
-            self.gui.log_message(f"✓ Convênio informado", "success")
+                self.gui.log_message(f"✓ Convênio informado", "success")
 
             anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.element_to_be_clickable(
