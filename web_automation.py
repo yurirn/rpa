@@ -145,7 +145,6 @@ class WebAutomation:
             
             if not self.is_patient_screen():    
                 patient_found = self.search_patient()
-                self.gui.log_message(patient_found, "success")
                 if not patient_found:
                     self.create_patient()
             else:
@@ -182,7 +181,11 @@ class WebAutomation:
                 time.sleep(0.5)
                 convenioInput.send_keys(Keys.ENTER)   
                 self.gui.log_message(f"✓ Convênio informado", "success")
+                
+                # Aguardar um pouco para a página processar a mudança
+                time.sleep(1)
 
+            # Reencontrar o elemento da âncora do código do usuário após possíveis mudanças na página
             anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.element_to_be_clickable(
                     (By.CSS_SELECTOR, "input#codigoUsuarioConvenio + a.table-editable-ancora")
@@ -337,7 +340,8 @@ class WebAutomation:
                 self.driver.execute_script("arguments[0].click();", anchor_quantidade)
                 self.gui.log_message("✓ Âncora da quantidade clicada - campo ativado", "success")
                 
-                # Encontrar o campo de quantidade e alterar para 4
+
+                time.sleep(1)
                 quantidade_input = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                     EC.visibility_of_element_located((By.NAME, 'quantidadeRecipiente'))
                 )
@@ -509,7 +513,7 @@ class WebAutomation:
                 self.gui.log_message("→ Nenhuma linha encontrada na tabela", "info")
                 return False
             
-            expected_birth_date = "10/10/1990" 
+            expected_birth_date = "29/10/2001" 
             
             for row in table_rows:
                 try:
