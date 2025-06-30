@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 import time
@@ -107,6 +108,14 @@ class WebAutomation:
             return create_button.is_displayed()
         except:
             return False
+        
+    def is_patient_screen(self):
+        """Verifica se o paciente já esta selecionado"""
+        try:
+            patient_screen = self.driver.find_element(By.CSS_SELECTOR, "input#nomeNascimento + a.table-editable-ancora")
+            return patient_screen.is_displayed()
+        except:
+            return False
             
     def create_new_exam(self):
         """Processo completo de criação de exame"""
@@ -134,15 +143,13 @@ class WebAutomation:
             else:
                 self.gui.log_message("✓ Já está na tela de exame - pulando botões", "success")
             
-            patient_found = self.search_patient()
-
-            if not patient_found:
+            if not self.is_patient_screen():
+                patient_found = self.search_patient()
                 self.create_patient()
             else:
                 self.gui.log_message("✓ Usando paciente existente selecionado", "success")
             
-            # Clica no botão "Próximo" para salvar o paciente
-            time.sleep(2)  # Aguarda o CEP ser processado
+            time.sleep(2) 
             
             next_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.element_to_be_clickable(
@@ -152,24 +159,44 @@ class WebAutomation:
             self.driver.execute_script("arguments[0].click();", next_button)
             self.gui.log_message("✓ Botão 'Próximo' clicado para salvar paciente", "success")
             
-            time.sleep(TIMEOUTS['page_load'])  # Aguarda processamento
+            time.sleep(TIMEOUTS['page_load']) 
 
             anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
                 EC.element_to_be_clickable(
                     (By.CSS_SELECTOR, "input#convenioInput + a.table-editable-ancora")
                 )
             )
+
+            valor_anchor = anchor.text.strip()
+            if valor_anchor.lower == "vazio":
+                anchor.click()
+
+                convenioInput = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.visibility_of_element_located((By.ID, 'convenioInput'))
+                )
+
+                convenioInput.clear()
+                convenioInput.send_keys("UNIMED (LONDRINA)") 
+                time.sleep(0.5)
+                convenioInput.send_keys(Keys.ENTER)   
+                
+            self.gui.log_message(f"✓ Convênio informado", "success")
+
+            anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, "input#codigoUsuarioConvenio + a.table-editable-ancora")
+                )
+            )
             anchor.click()
 
-            convenioInput = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
-                EC.visibility_of_element_located((By.ID, 'convenioInput'))
+            numero_da_carteira = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.visibility_of_element_located((By.ID, 'codigoUsuarioConvenio'))
             )
 
-            convenioInput.clear()
-            convenioInput.send_keys("UNIMED (LONDRINA)") 
+            numero_da_carteira.clear()
+            numero_da_carteira.send_keys("0050000004252740") 
 
-            self.gui.log_message(f"✓ Telefone inserido no campo", "success")
-             
+            self.gui.log_message(f"✓ Numero da carteirinha informado", "success")
             
         except Exception as e:         
             tb = traceback.format_exc()
@@ -372,10 +399,7 @@ class WebAutomation:
 
                 self.driver.execute_script("arguments[0].blur();", cep)
 
-            self.gui.log_message(f"✓ Cep informado", "success")  
-            
-            
-            
+            self.gui.log_message(f"✓ Cep informado", "success")                     
 
         except Exception as e:
             self.gui.log_message(f"✗ Erro ao criar paciente: {str(e)}", "error")
