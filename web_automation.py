@@ -141,6 +141,36 @@ class WebAutomation:
             else:
                 self.gui.log_message("✓ Usando paciente existente selecionado", "success")
             
+            # Clica no botão "Próximo" para salvar o paciente
+            time.sleep(2)  # Aguarda o CEP ser processado
+            
+            next_button = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, "a.btn.btn-sm.btn-primary.chamadaAjax.setupAjax[data-url='/paciente/saveAjax']")
+                )
+            )
+            self.driver.execute_script("arguments[0].click();", next_button)
+            self.gui.log_message("✓ Botão 'Próximo' clicado para salvar paciente", "success")
+            
+            time.sleep(TIMEOUTS['page_load'])  # Aguarda processamento
+
+            anchor = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, "input#convenioInput + a.table-editable-ancora")
+                )
+            )
+            anchor.click()
+
+            convenioInput = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                EC.visibility_of_element_located((By.ID, 'convenioInput'))
+            )
+
+            convenioInput.clear()
+            convenioInput.send_keys("UNIMED (LONDRINA)") 
+
+            self.gui.log_message(f"✓ Telefone inserido no campo", "success")
+             
+            
         except Exception as e:         
             tb = traceback.format_exc()
             self.gui.log_message(f"✗ Erro ao criar exame: {str(e)}\n{tb}", "error")
@@ -343,6 +373,8 @@ class WebAutomation:
                 self.driver.execute_script("arguments[0].blur();", cep)
 
             self.gui.log_message(f"✓ Cep informado", "success")  
+            
+            
             
 
         except Exception as e:
