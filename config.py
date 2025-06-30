@@ -9,7 +9,7 @@ GUI_FONT_LOG = ("Consolas", 9)
 
 # Configurações do Chrome
 CHROME_OPTIONS = [
-    "--start-minimized",
+    "--start-maximized",
     "--disable-blink-features=AutomationControlled"
 ]
 
@@ -53,7 +53,7 @@ TIMEOUTS = {
 }
 
 # Nome do paciente (configurável)
-PATIENT_NAME = "Yuri Rodrigues Mendes"  
+PATIENT_NAME = "Yuri Rodrigues NEVES"  
 
 # Cores para logs
 LOG_COLORS = {

@@ -197,6 +197,230 @@ class WebAutomation:
             numero_da_carteira.send_keys("0050000004252740") 
 
             self.gui.log_message(f"✓ Numero da carteirinha informado", "success")
+
+            # Inserir médico requisitante
+            time.sleep(2)  # Aguardar carregamento da página
+            
+            try:
+                # Tentar encontrar a âncora do médico requisitante de diferentes formas
+                anchor_medico = None
+                
+                # Primeira tentativa: âncora próxima ao input
+                try:
+                    anchor_medico = self.driver.find_element(By.XPATH, "//input[@id='medicoRequisitanteInput']/following-sibling::a[contains(@class, 'table-editable-ancora')]")
+                except:
+                    pass
+                
+                # Segunda tentativa: âncora com texto "Vazio" na mesma célula
+                if not anchor_medico:
+                    try:
+                        anchor_medico = self.driver.find_element(By.XPATH, "//td[input[@id='medicoRequisitanteInput']]//a[contains(@class, 'table-editable-ancora')]")
+                    except:
+                        pass
+                
+                # Terceira tentativa: qualquer âncora table-editable próxima ao input do médico
+                if not anchor_medico:
+                    anchor_medico = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//input[@id='medicoRequisitanteInput']/..//a[contains(@class, 'table-editable-ancora')]")
+                        )
+                    )
+                
+                self.driver.execute_script("arguments[0].click();", anchor_medico)
+                self.gui.log_message("✓ Campo médico ativado", "success")
+
+                medico_input = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.visibility_of_element_located((By.ID, 'medicoRequisitanteInput'))
+                )
+
+                medico_input.clear()
+                medico_input.send_keys("LEONARDO OBA")
+                
+                # Aguardar dropdown aparecer e selecionar opção
+                time.sleep(1.5)
+                
+                try:
+                    # Procurar pela opção que contém "LEONARDO OBA" no dropdown
+                    dropdown_option = WebDriverWait(self.driver, 3).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//ul[contains(@class, 'typeahead')]//a[contains(text(), 'LEONARDO OBA')]")
+                        )
+                    )
+                    dropdown_option.click()
+                    self.gui.log_message(f"✓ Médico 'LEONARDO OBA' selecionado do dropdown", "success")
+                    medico_input.send_keys(Keys.ENTER)
+                except:
+                    # Se não encontrar no dropdown, tentar pressionar Enter
+                    medico_input.send_keys(Keys.ENTER)
+                    self.gui.log_message(f"✓ Nome do médico 'LEONARDO OBA' inserido", "success")
+                    
+            except Exception as e:
+                self.gui.log_message(f"✗ Erro ao inserir médico requisitante: {str(e)}", "error")
+                # Continuar execução sem parar por este erro
+
+            # Inserir procedência
+            time.sleep(2)  # Aguardar carregamento após seleção do médico
+            
+            try:
+                self.gui.log_message("→ Procurando âncora da procedência...", "info")
+                
+                # Primeiro clicar na âncora para ativar o campo
+                anchor_procedencia = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//input[@id='procedenciaInput']/following-sibling::a[contains(@class, 'table-editable-ancora')]")
+                    )
+                )
+                self.driver.execute_script("arguments[0].click();", anchor_procedencia)
+                self.gui.log_message("✓ Âncora da procedência clicada - campo ativado", "success")
+
+                # Agora encontrar o campo de input que deve estar visível
+                procedencia_input = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.visibility_of_element_located((By.ID, 'procedenciaInput'))
+                )
+                self.gui.log_message("✓ Campo de procedência encontrado e visível", "success")
+
+                self.gui.log_message("→ Preenchendo campo de procedência...", "info")
+                procedencia_input.clear()
+                procedencia_input.send_keys("GASTROCLINICA")
+                self.gui.log_message("✓ Texto 'GASTROCLINICA' inserido no campo", "success")
+                
+                # Aguardar dropdown aparecer e selecionar opção
+                time.sleep(1.5)
+                
+                try:
+                    self.gui.log_message("→ Procurando opção no dropdown...", "info")
+                    # Procurar pela opção "GASTROCLINICA" no dropdown
+                    dropdown_option = WebDriverWait(self.driver, 3).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//ul[contains(@class, 'typeahead')]//a[contains(text(), 'GASTROCLINICA')]")
+                        )
+                    )
+                    dropdown_option.click()
+                    self.gui.log_message(f"✓ Procedência 'GASTROCLINICA' selecionada do dropdown", "success")
+                except Exception as dropdown_error:
+                    self.gui.log_message(f"→ Dropdown não encontrado ({str(dropdown_error)}), tentando Enter...", "warning")
+                    # Se não encontrar no dropdown, tentar pressionar Enter
+                    procedencia_input.send_keys(Keys.ENTER)
+                    self.gui.log_message(f"✓ Procedência 'GASTROCLINICA' inserida com Enter", "success")
+                    
+            except Exception as e:
+                tb = traceback.format_exc()
+                self.gui.log_message(f"✗ Erro ao inserir procedência: {str(e)}\nTraceback: {tb}", "error")
+                # Continuar execução sem parar por este erro
+
+            # Adicionar novo material
+            time.sleep(2)  # Aguardar carregamento após procedência
+            
+            try:
+                self.gui.log_message("→ Procurando botão 'Novo material'...", "info")
+                
+                # Encontrar e clicar no link "Novo material"
+                novo_material_link = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//a[@title='Novo material' and contains(@class, 'chamadaAjax')]")
+                    )
+                )
+                self.driver.execute_script("arguments[0].click();", novo_material_link)
+                self.gui.log_message("✓ Botão 'Novo material' clicado", "success")
+                
+                # Aguardar carregar o novo campo
+                time.sleep(2)
+                
+                # Encontrar e clicar na âncora da quantidade de recipiente
+                self.gui.log_message("→ Procurando campo de quantidade de recipiente...", "info")
+                anchor_quantidade = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//input[@name='quantidadeRecipiente']/following-sibling::a[contains(@class, 'table-editable-ancora')]")
+                    )
+                )
+                self.driver.execute_script("arguments[0].click();", anchor_quantidade)
+                self.gui.log_message("✓ Âncora da quantidade clicada - campo ativado", "success")
+                
+                # Encontrar o campo de quantidade e alterar para 4
+                quantidade_input = WebDriverWait(self.driver, TIMEOUTS['element_wait']).until(
+                    EC.visibility_of_element_located((By.NAME, 'quantidadeRecipiente'))
+                )
+                
+                quantidade_input.clear()
+                quantidade_input.send_keys("4")
+                self.gui.log_message("✓ Quantidade alterada para 4", "success")
+                
+            except Exception as e:
+                tb = traceback.format_exc()
+                self.gui.log_message(f"✗ Erro ao adicionar material: {str(e)}\nTraceback: {tb}", "error")
+                # Continuar execução sem parar por este erro
+
+            # Clicar no botão Próximo para finalizar
+            time.sleep(2)  # Aguardar carregamento após adicionar material
+            
+            try:
+                self.gui.log_message("→ Procurando botão 'Próximo'...", "info")
+                
+                # Múltiplas tentativas para encontrar o botão "Próximo"
+                proximo_button = None
+                
+                # Tentativa 1: Por data-url específico
+                try:
+                    proximo_button = self.driver.find_element(By.XPATH, "//a[@data-url='/moduloExame/saveExameAjax']")
+                    self.gui.log_message("✓ Botão 'Próximo' encontrado por data-url", "success")
+                except:
+                    pass
+                
+                # Tentativa 2: Por title="Próximo"
+                if not proximo_button:
+                    try:
+                        proximo_button = self.driver.find_element(By.XPATH, "//a[@title='Próximo']")
+                        self.gui.log_message("✓ Botão 'Próximo' encontrado por title", "success")
+                    except:
+                        pass
+                
+                # Tentativa 3: Por texto "Próximo" com classes btn
+                if not proximo_button:
+                    try:
+                        proximo_button = self.driver.find_element(By.XPATH, "//a[contains(@class, 'btn') and contains(text(), 'Próximo')]")
+                        self.gui.log_message("✓ Botão 'Próximo' encontrado por texto e classe", "success")
+                    except:
+                        pass
+                
+                # Tentativa 4: Por classes específicas
+                if not proximo_button:
+                    try:
+                        proximo_button = self.driver.find_element(By.XPATH, "//a[contains(@class, 'chamadaAjax') and contains(@class, 'btn-primary')]")
+                        self.gui.log_message("✓ Botão 'Próximo' encontrado por classes", "success")
+                    except:
+                        pass
+                
+                # Tentativa 5: Qualquer link com "Próximo"
+                if not proximo_button:
+                    try:
+                        proximo_button = self.driver.find_element(By.XPATH, "//a[contains(text(), 'Próximo')]")
+                        self.gui.log_message("✓ Botão 'Próximo' encontrado por texto", "success")
+                    except:
+                        pass
+                
+                if proximo_button:
+                    # Aguardar até o botão estar clicável
+                    WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable(proximo_button))
+                    self.driver.execute_script("arguments[0].click();", proximo_button)
+                    self.gui.log_message("✓ Botão 'Próximo' clicado - finalizando exame", "success")
+                    
+                    # Aguardar processamento
+                    time.sleep(3)
+                    self.gui.log_message("✓ Processo de criação de exame finalizado!", "success")
+                else:
+                    self.gui.log_message("✗ Botão 'Próximo' não encontrado em nenhuma tentativa", "error")
+                    # Tentar listar todos os botões disponíveis para debug
+                    try:
+                        buttons = self.driver.find_elements(By.TAG_NAME, "a")
+                        button_texts = [btn.text.strip() for btn in buttons if btn.text.strip()]
+                        self.gui.log_message(f"→ Botões disponíveis: {button_texts[:10]}", "info")  # Mostrar só os primeiros 10
+                    except:
+                        pass
+                
+            except Exception as e:
+                tb = traceback.format_exc()
+                self.gui.log_message(f"✗ Erro ao clicar no botão Próximo: {str(e)}\nTraceback: {tb}", "error")
+                # Continuar execução sem parar por este erro
             
         except Exception as e:         
             tb = traceback.format_exc()
