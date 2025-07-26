@@ -161,7 +161,7 @@ class MainWindow:
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(0, weight=1)
 
-        self.log_text = tk.Text(frame, wrap="word", height=12, font=("Consolas", 9))
+        self.log_text = tk.Text(frame, wrap="word", height=20, font=("Consolas", 9))
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky="nsew")

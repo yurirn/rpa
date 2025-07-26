@@ -29,10 +29,6 @@ def run(params: dict):
     excel_file = params.get("excel_file")
     modo_busca = params.get("modo_busca", "exame")  # padrão: exame
 
-    if not username or not password or not excel_file:
-        messagebox.showwarning("Campos vazios", "Preencha usuário, senha e selecione o arquivo Excel.")
-        return
-
     try:
         exames_unicos = get_unique_exames(excel_file, modo_busca)
     except Exception as e:
@@ -55,7 +51,7 @@ def run(params: dict):
         driver.find_element(By.ID, "password").send_keys(password)
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
         wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']"))).click()
-        time.sleep(4)
+        time.sleep(3)
 
         try:
             modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
