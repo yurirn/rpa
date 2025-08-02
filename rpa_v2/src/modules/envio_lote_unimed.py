@@ -12,9 +12,11 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
+from src.modules.base import BaseModule
 
-class UnimedUploader:
+class UnimedUploader(BaseModule):
     def __init__(self, username, password, driver=None, timeout=15):
+        super().__init__(nome="Envio Lote Unimed")
         self.username = username
         self.password = password
         self.timeout = timeout
@@ -65,8 +67,9 @@ class UnimedUploader:
             log_message("Fechando navegador do upload Unimed.", "INFO")
             self.driver.quit()
 
-class XMLGeneratorAutomation:
+class XMLGeneratorAutomation(BaseModule):
     def __init__(self, username, password, timeout=15, pasta_download=None, fechar_em_erro=False):
+        super().__init__(nome="Geração e Envio XML Unimed")
         self.username = username
         self.password = password
         self.timeout = timeout
@@ -236,21 +239,37 @@ class XMLGeneratorAutomation:
                 log_message(f"Arquivo {arquivo} enviado para Unimed.", "SUCCESS")
         #uploader.fechar()
 
-    def executar_processo_completo_login_navegacao(self, unimed_user, unimed_pass):
+    def executar_processo_completo_login_navegacao(self, unimed_user, unimed_pass, cancel_flag=None):
         try:
             log_message("Iniciando automação de envio de lote Unimed...", "INFO")
             self.inicializar_driver()
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                self.fechar_navegador()
+                return False
             self.fazer_login()
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                self.fechar_navegador()
+                return False
             self.acessar_modulo_faturamento()
             self.fechar_modal_se_necessario()
             self.acessar_preparar_exames_para_fatura()
             self.configurar_filtros_e_pesquisar()
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                self.fechar_navegador()
+                return False
             arquivos_extraidos = self.processar_download_completo()
             if not arquivos_extraidos:
                 log_message("Nenhum arquivo extraído para envio.", "ERROR")
                 self.fechar_navegador()
                 return False
             self.arquivos_extraidos = arquivos_extraidos
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                self.fechar_navegador()
+                return False
             self.enviar_para_unimed(arquivos_extraidos, unimed_user, unimed_pass)
             log_message("Processo concluído com sucesso!", "SUCCESS")
             self.fechar_navegador()
@@ -277,10 +296,10 @@ def run(params):
     username = params.get("username")
     password = params.get("password")
     unimed_user = params.get("unimed_user", "408.832.948-18")
-    unimed_pass = params.get("unimed_pass", "Dap2025*")
+    unimed_pass = params.get("unimed_pass", "*Dap2025*")
     pasta_download = params.get("pasta_download", os.path.join(os.getcwd(), "xml"))
-
-    automation = XMLGeneratorAutomation(username, password, pasta_download=pasta_download)
-    sucesso = automation.executar_processo_completo_login_navegacao(unimed_user, unimed_pass)
+    cancel_flag = params.get("cancel_flag")
+    module = XMLGeneratorAutomation(username, password, pasta_download=pasta_download)
+    sucesso = module.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
     if not sucesso:
         log_message("❌ Falha na automação de envio de lote Unimed.", "ERROR")

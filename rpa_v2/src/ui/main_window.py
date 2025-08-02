@@ -6,6 +6,7 @@ from src.core.logger import set_logger_callback
 import importlib
 import json
 import os
+import threading
 
 CONFIG_FILE = 'config.json'
 MODULES_FILE = 'modules.json'
@@ -20,20 +21,27 @@ class MainWindow:
         self.root.minsize(1000, 600)
         self.center_window()
 
-        self.selected_module = tk.StringVar()
+        self.selected_module_id = tk.StringVar()
+        self.selected_module_name = tk.StringVar()
         self.username = tk.StringVar()
         self.password = tk.StringVar()
         self.show_password = tk.BooleanVar(value=False)
         self.excel_file_path = tk.StringVar()
         self.tipo_busca = tk.StringVar(value="numero_exame")
+        self.gera_xml_tiss = tk.StringVar(value="sim")
 
         self.modules = self.load_modules()
+        self.module_id_map = {m['id']: m for m in self.modules}
+        self.module_name_map = {m['name']: m for m in self.modules}
         self.load_last_username()
         self.setup_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.log("Sistema iniciado", "SUCCESS")
         self.set_initial_focus()
         set_logger_callback(self.log)
+
+        self.execution_thread = None
+        self.cancel_requested = threading.Event()
 
     def load_modules(self):
         try:
@@ -99,7 +107,12 @@ class MainWindow:
         frame.columnconfigure(1, weight=1)
 
         ttk.Label(frame, text="Selecione:").grid(row=0, column=0, sticky="w")
-        self.module_combo = ttk.Combobox(frame, textvariable=self.selected_module, state="readonly", values=[m["name"] for m in self.modules])
+        self.module_combo = ttk.Combobox(
+            frame,
+            textvariable=self.selected_module_name,
+            state="readonly",
+            values=[m["name"] for m in self.modules]
+        )
         self.module_combo.grid(row=0, column=1, sticky="ew")
         self.module_combo.bind('<<ComboboxSelected>>', self.on_module_selected)
 
@@ -115,23 +128,36 @@ class MainWindow:
         for widget in self.params_frame.winfo_children():
             widget.destroy()
 
-        if self.selected_module.get() == "Preparação Lote (Excel)":
+        module_id = self.selected_module_id.get()
+        module = self.module_id_map.get(module_id)
+        requires_excel = module.get("requires_excel") if module else False
+        has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
+
+        row = 0
+        if requires_excel:
             self.params_frame.columnconfigure(1, weight=1)
-
-            ttk.Label(self.params_frame, text="Arquivo Excel:").grid(row=0, column=0, sticky="w")
+            ttk.Label(self.params_frame, text="Arquivo Excel:").grid(row=row, column=0, sticky="w")
             entry = ttk.Entry(self.params_frame, textvariable=self.excel_file_path)
-            entry.grid(row=0, column=1, sticky="ew", padx=(0, 10))
-            ttk.Button(self.params_frame, text="Selecionar", command=self.select_excel_file).grid(row=0, column=2)
-
-            ttk.Label(self.params_frame, text="Tipo de Busca:").grid(row=1, column=0, sticky="w", pady=(15, 5))
+            entry.grid(row=row, column=1, sticky="ew", padx=(0, 10))
+            ttk.Button(self.params_frame, text="Selecionar", command=self.select_excel_file).grid(row=row, column=2)
+            row += 1
+            ttk.Label(self.params_frame, text="Tipo de Busca:").grid(row=row, column=0, sticky="w", pady=(15, 5))
             busca_frame = ttk.Frame(self.params_frame)
-            busca_frame.grid(row=1, column=1, sticky="w", columnspan=2)
+            busca_frame.grid(row=row, column=1, sticky="w", columnspan=2)
             ttk.Radiobutton(busca_frame, text="Número de Exame", variable=self.tipo_busca, value="numero_exame", command=self.on_tipo_busca_changed).pack(side=tk.LEFT, padx=(0, 20))
             ttk.Radiobutton(busca_frame, text="Número de Guia", variable=self.tipo_busca, value="numero_guia", command=self.on_tipo_busca_changed).pack(side=tk.LEFT)
-
+            row += 1
             self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"), foreground="blue")
-            self.descricao_tipo.grid(row=2, column=0, columnspan=3, sticky="w", pady=(5, 0))
-        else:
+            self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
+            row += 1
+        if has_gera_xml_tiss:
+            ttk.Label(self.params_frame, text="Gera XML TISS?:").grid(row=row, column=0, sticky="w", pady=(15, 5))
+            gera_xml_frame = ttk.Frame(self.params_frame)
+            gera_xml_frame.grid(row=row, column=1, sticky="w", columnspan=2)
+            ttk.Radiobutton(gera_xml_frame, text="Sim", variable=self.gera_xml_tiss, value="sim").pack(side=tk.LEFT, padx=(0, 20))
+            ttk.Radiobutton(gera_xml_frame, text="Não", variable=self.gera_xml_tiss, value="nao").pack(side=tk.LEFT)
+            row += 1
+        if not requires_excel and not has_gera_xml_tiss:
             ttk.Label(self.params_frame, text="Os parâmetros aparecerão aqui quando um módulo for selecionado", foreground="gray").pack(pady=20)
 
     def on_tipo_busca_changed(self):
@@ -210,32 +236,35 @@ class MainWindow:
         return True
 
     def on_module_selected(self, event=None):
-        module_name = self.selected_module.get()
-        if not module_name:
+        # Buscar pelo nome selecionado e obter o id
+        selected_name = self.module_combo.get()
+        module = self.module_name_map.get(selected_name)
+        if not module:
+            self.module_description.config(text="Módulo não encontrado")
             return
-        desc = next((m["description"] for m in self.modules if m["name"] == module_name), "Sem descrição disponível")
+        self.selected_module_id.set(module['id'])
+        self.selected_module_name.set(module['name'])
+        desc = module.get("description", "Sem descrição disponível")
         self.module_description.config(text=f"📋 {desc}")
         self.run_button.config(state="normal")
         self.update_params_section()
-        self.log(f"Módulo selecionado: {module_name}", "INFO")
+        self.log(f"Módulo selecionado: {selected_name} (id: {module['id']})", "INFO")
 
     def run_module(self):
-        module_name = self.selected_module.get()
-        if not module_name or not self.username.get().strip() or not self.password.get().strip():
+        module_id = self.selected_module_id.get()
+        if not module_id or not self.username.get().strip() or not self.password.get().strip():
             messagebox.showwarning("Aviso", "Preencha usuário, senha e selecione o módulo.")
             return
-
-        module_info = next((m for m in self.modules if m["name"] == module_name), None)
-        if not module_info:
+        module = self.module_id_map.get(module_id)
+        if not module:
             self.log("Módulo não encontrado", "ERROR")
             return
-
         params = {
             "username": self.username.get(),
-            "password": self.password.get()
+            "password": self.password.get(),
+            "cancel_flag": self.cancel_requested
         }
-
-        if module_name == "Preparação Lote (Excel)":
+        if module.get("requires_excel"):
             excel_path = self.excel_file_path.get()
             if not os.path.exists(excel_path):
                 messagebox.showerror("Erro", "Arquivo Excel não encontrado!")
@@ -244,25 +273,31 @@ class MainWindow:
                 "excel_file": excel_path,
                 "modo_busca": "exame" if self.tipo_busca.get() == "numero_exame" else "guia"
             })
-
-        try:
-            mod = importlib.import_module(module_info["module_path"])
-            if hasattr(mod, "run"):
-                mod.run(params)
-        except Exception as e:
-            self.log(f"Erro: {e}", "ERROR")
-
+        if module.get("has_gera_xml_tiss"):
+            params["gera_xml_tiss"] = self.gera_xml_tiss.get()
+        def run_in_thread():
+            try:
+                mod = importlib.import_module(module["module_path"])
+                if hasattr(mod, "run"):
+                    mod.run(params)
+            except Exception as e:
+                self.log(f"Erro: {e}", "ERROR")
+            finally:
+                self.root.after(0, self.execution_finished)
         self.run_button.config(state="disabled")
         self.stop_button.config(state="normal")
-        self.root.after(2000, self.execution_finished)
+        self.cancel_requested.clear()
+        self.execution_thread = threading.Thread(target=run_in_thread, daemon=True)
+        self.execution_thread.start()
 
     def execution_finished(self):
-        self.log("Execução finalizada (simulação)", "SUCCESS")
+        self.log("Execução finalizada", "SUCCESS")
         self.run_button.config(state="normal")
         self.stop_button.config(state="disabled")
 
     def stop_module(self):
         self.log("Execução interrompida pelo usuário", "WARNING")
+        self.cancel_requested.set()
         self.run_button.config(state="normal")
         self.stop_button.config(state="disabled")
 

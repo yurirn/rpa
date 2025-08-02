@@ -1,17 +1,26 @@
 [
   {
+    "id": "criacao_exames",
     "name": "Criação de Exames",
     "description": "Automatiza a criação de novos exames no sistema",
-    "module_path": "modules.criacao_exames"
+    "module_path": "modules.criacao_exames",
+    "requires_excel": false,
+    "has_gera_xml_tiss": false
   },
   {
+    "id": "preparacao_lote",
     "name": "Preparação Lote (Excel)",
     "description": "Lê arquivo Excel e marca exames como 'Conferido: On-line'",
-    "module_path": "modules.preparacao_lote"
+    "module_path": "modules.preparacao_lote",
+    "requires_excel": true,
+    "has_gera_xml_tiss": true
   },
   {
+    "id": "envio_lote_unimed",
     "name": "Envio Lote Unimed",
     "description": "Gera arquivo XML e faz o envio para a Unimed",
-    "module_path": "modules.envio_lote_unimed"
+    "module_path": "modules.envio_lote_unimed",
+    "requires_excel": false,
+    "has_gera_xml_tiss": false
   }
 ]

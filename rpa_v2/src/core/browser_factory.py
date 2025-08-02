@@ -13,6 +13,7 @@ class BrowserFactory:
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--allow-running-insecure-content")
         chrome_options.add_argument("--start-maximized")
+        #chrome_options.add_argument("--headless=new")
         if download_dir:
             prefs = {
                 "download.default_directory": download_dir,

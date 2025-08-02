@@ -8,9 +8,11 @@ from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
 from config import SELECTORS, TIMEOUTS, PATIENT_NAME
 from src.utils.viacep_client import buscar_endereco
+from src.modules.base import BaseModule
 
-class ExamAutomation:
+class ExamAutomation(BaseModule):
     def __init__(self):
+        super().__init__(nome="Criação de Exames")
         self.driver = None
         self.wait = None
 
@@ -282,6 +284,7 @@ class ExamAutomation:
         username = params.get("username")
         password = params.get("password")
         url = params.get("url", "https://pathoweb.com.br/login/auth")
+        cancel_flag = params.get("cancel_flag")
         self.setup(url)
         try:
             log_message("Iniciando automação de criação de exame...", "INFO")
@@ -305,7 +308,13 @@ class ExamAutomation:
             else:
                 log_message("Usando paciente existente selecionado", "SUCCESS")
             time.sleep(2)
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                return
             self.fill_exam_data()
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                return
             self.finalize_exam_creation()
             log_message("✓ Processo de criação de exame concluído!", "SUCCESS")
         except Exception as e:
@@ -315,5 +324,5 @@ class ExamAutomation:
             self.driver.quit()
 
 def run(params):
-    automation = ExamAutomation()
-    automation.run(params)
+    module = ExamAutomation()
+    module.run(params)
