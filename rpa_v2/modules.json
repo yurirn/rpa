@@ -22,5 +22,13 @@
     "module_path": "modules.envio_lote_unimed",
     "requires_excel": false,
     "has_gera_xml_tiss": false
+  },
+  {
+    "id": "envio_lote_unimed_100guias",
+    "name": "Envio Lote Unimed - + 100 Guias",
+    "description": "Gera arquivo XML com 100 guias e faz o envio para a Unimed",
+    "module_path": "modules.envio_lote_unimed_100guias",
+    "requires_excel": false,
+    "has_gera_xml_tiss": false
   }
 ]
