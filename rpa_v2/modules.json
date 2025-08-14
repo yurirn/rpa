@@ -30,5 +30,13 @@
     "module_path": "modules.envio_lote_unimed_100guias",
     "requires_excel": false,
     "has_gera_xml_tiss": false
+  },
+  {
+    "id": "conclusao",
+    "name": "Conclusão de Exame",
+    "description": "",
+    "module_path": "modules.conclusao",
+    "requires_excel": true,
+    "has_gera_xml_tiss": false
   }
 ]
