@@ -52,16 +52,63 @@ class ConclusaoModule(BaseModule):
         except Exception as e:
             raise Exception(f"Erro ao ler planilha: {e}")
 
+    def verificar_sessao_browser(self, driver) -> bool:
+        """Verifica se a sessão do browser ainda está ativa"""
+        try:
+            driver.current_url
+            return True
+        except Exception as e:
+            if "invalid session id" in str(e).lower():
+                log_message("❌ Sessão do browser perdida", "ERROR")
+                return False
+            return True
+
     def verificar_svg_conclusao(self, driver) -> bool:
         """Verifica se existe o SVG na etapa Conclusão"""
         try:
-            # Procura pelo link de Conclusão que contenha o SVG
-            conclusao_link = driver.find_element(
-                By.XPATH, 
-                "//a[@data-id='C' and contains(., 'Conclusão')]//svg[@data-icon='arrow-right']"
-            )
-            return conclusao_link is not None
-        except Exception:
+            # Método 1: Procurar pelo link de Conclusão que contenha o SVG arrow-right
+            try:
+                conclusao_link = driver.find_element(
+                    By.XPATH, 
+                    "//a[@data-id='C' and contains(., 'Conclusão')]//svg[@data-icon='arrow-right']"
+                )
+                if conclusao_link:
+                    log_message("✅ SVG arrow-right encontrado na etapa Conclusão", "INFO")
+                    return True
+            except:
+                pass
+            
+            # Método 2: Verificar se o link de Conclusão está clicável/ativo
+            try:
+                conclusao_link = driver.find_element(By.XPATH, "//a[@data-id='C' and contains(., 'Conclusão')]")
+                # Verificar se o link não tem classe que indica inativo
+                classe_link = conclusao_link.get_attribute("class") or ""
+                if "disabled" not in classe_link.lower() and "inactive" not in classe_link.lower():
+                    # Verificar se existe SVG dentro do link
+                    svgs = conclusao_link.find_elements(By.TAG_NAME, "svg")
+                    if svgs:
+                        log_message(f"✅ SVG encontrado na etapa Conclusão (método 2)", "INFO")
+                        return True
+            except:
+                pass
+                
+            # Método 3: Verificar qualquer SVG com arrow-right próximo à Conclusão
+            try:
+                svg_arrows = driver.find_elements(By.XPATH, "//svg[@data-icon='arrow-right']")
+                for svg in svg_arrows:
+                    # Verificar se o SVG está próximo ao texto "Conclusão"
+                    parent = svg.find_element(By.XPATH, "..")
+                    if "conclusão" in parent.text.lower():
+                        log_message("✅ SVG arrow-right encontrado próximo à Conclusão (método 3)", "INFO")
+                        return True
+            except:
+                pass
+            
+            log_message("⚠️ SVG não encontrado na etapa Conclusão", "WARNING")
+            return False
+            
+        except Exception as e:
+            log_message(f"Erro ao verificar SVG conclusão: {e}", "ERROR")
             return False
 
     def fechar_exame(self, driver, wait):
@@ -73,12 +120,32 @@ class ConclusaoModule(BaseModule):
             botao_fechar.click()
             log_message("📁 Exame fechado (sem SVG na conclusão)", "INFO")
             time.sleep(2)
+            
+            # Aguardar retornar à tela principal
+            try:
+                # Verificar se voltou à tela principal aguardando o campo de código aparecer
+                wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
+                log_message("✅ Retornou à tela principal após fechar exame", "INFO")
+            except:
+                log_message("⚠️ Pode não ter retornado à tela principal", "WARNING")
+                # Tentar navegar de volta ao módulo se necessário
+                try:
+                    current_url = driver.current_url
+                    if "modulo=1" not in current_url:
+                        modulo_link = driver.find_element(By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")
+                        modulo_link.click()
+                        time.sleep(3)
+                        log_message("🔄 Navegou de volta ao módulo de exames", "INFO")
+                except:
+                    pass
+                    
         except Exception as e:
             log_message(f"Erro ao fechar exame: {e}", "ERROR")
 
     def clicar_conclusao(self, driver, wait):
         """Clica no link de Conclusão"""
         try:
+            # Clicar diretamente no link de Conclusão (não no SVG)
             conclusao_link = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//a[@data-id='C' and contains(., 'Conclusão')]"))
             )
@@ -102,21 +169,38 @@ class ConclusaoModule(BaseModule):
     def digitar_mascara_e_buscar(self, driver, wait, mascara):
         """Digita a máscara no campo buscaArvore e pressiona Enter"""
         try:
-            # Aguardar o campo estar presente e visível
+            # Aguardar o campo estar presente e visível com timeout maior
+            log_message(f"🔍 Procurando campo buscaArvore...", "INFO")
             campo_busca = wait.until(EC.element_to_be_clickable((By.ID, "buscaArvore")))
             log_message(f"🔍 Campo buscaArvore encontrado e clicável", "INFO")
+            
+            # Verificar se o campo está visível
+            if not campo_busca.is_displayed():
+                log_message("⚠️ Campo buscaArvore não está visível", "WARNING")
+                return
+            
+            # Rolar até o campo para garantir visibilidade
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", campo_busca)
+            time.sleep(1)
             
             # Focar no campo primeiro
             campo_busca.click()
             time.sleep(0.5)
             
+            # Limpar o campo
             campo_busca.clear()
             time.sleep(0.5)
             
+            # Alternativa de limpeza se clear() não funcionar
+            driver.execute_script("arguments[0].value = '';", campo_busca)
+            time.sleep(0.5)
+            
+            # Digitar a máscara
             campo_busca.send_keys(mascara)
-            log_message(f"✍️ Máscara '{mascara}' digitada", "INFO")
+            log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "INFO")
             time.sleep(1)
             
+            # Pressionar Enter
             campo_busca.send_keys(Keys.ENTER)
             log_message(f"⌨️ Enter pressionado após digitar máscara", "INFO")
             time.sleep(3)
@@ -125,8 +209,18 @@ class ConclusaoModule(BaseModule):
             log_message(f"Erro ao digitar máscara: {e}", "ERROR")
             # Tentar encontrar o campo de outra forma
             try:
-                campos = driver.find_elements(By.XPATH, "//input[@id='buscaArvore']")
-                log_message(f"Encontrados {len(campos)} campos com id buscaArvore", "INFO")
+                # Verificar se existe campo com classe específica
+                campos_alternativos = driver.find_elements(By.XPATH, "//input[@class='btn-xs' and @type='text']")
+                log_message(f"Encontrados {len(campos_alternativos)} campos alternativos", "INFO")
+                
+                if campos_alternativos:
+                    campo_alternativo = campos_alternativos[0]
+                    campo_alternativo.click()
+                    campo_alternativo.clear()
+                    campo_alternativo.send_keys(mascara)
+                    campo_alternativo.send_keys(Keys.ENTER)
+                    log_message(f"✅ Máscara digitada usando campo alternativo", "INFO")
+                    return
                 
                 # Listar todos os inputs para debug
                 inputs = driver.find_elements(By.TAG_NAME, "input")
@@ -145,9 +239,20 @@ class ConclusaoModule(BaseModule):
         """Clica no botão Salvar"""
         try:
             # Aguardar o botão estar presente e clicável
+            log_message("💾 Procurando botão Salvar...", "INFO")
             botao_salvar = wait.until(EC.element_to_be_clickable((By.ID, "salvarConcl")))
             log_message("💾 Botão Salvar encontrado e clicável", "INFO")
             
+            # Verificar se o botão está visível
+            if not botao_salvar.is_displayed():
+                log_message("⚠️ Botão salvarConcl não está visível", "WARNING")
+                return
+            
+            # Rolar até o botão para garantir visibilidade
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_salvar)
+            time.sleep(1)
+            
+            # Clicar no botão
             botao_salvar.click()
             log_message("💾 Clicou em Salvar", "INFO")
             time.sleep(3)
@@ -156,8 +261,29 @@ class ConclusaoModule(BaseModule):
             log_message(f"Erro ao salvar: {e}", "ERROR")
             # Tentar encontrar o botão de outra forma
             try:
-                botoes = driver.find_elements(By.XPATH, "//a[@id='salvarConcl']")
-                log_message(f"Encontrados {len(botoes)} botões com id salvarConcl", "INFO")
+                # Tentar por link com onclick específico
+                botoes_onclick = driver.find_elements(By.XPATH, "//a[contains(@onclick, 'ajaxChangeSave')]")
+                log_message(f"Encontrados {len(botoes_onclick)} botões com onclick ajaxChangeSave", "INFO")
+                
+                if botoes_onclick:
+                    botao_onclick = botoes_onclick[0]
+                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_onclick)
+                    time.sleep(1)
+                    botao_onclick.click()
+                    log_message("💾 Clicou em Salvar usando onclick", "INFO")
+                    return
+                
+                # Tentar por classe do botão
+                botoes_classe = driver.find_elements(By.XPATH, "//a[contains(@class, 'btn-primary') and contains(text(), 'Salvar')]")
+                log_message(f"Encontrados {len(botoes_classe)} botões com classe btn-primary e texto Salvar", "INFO")
+                
+                if botoes_classe:
+                    botao_classe = botoes_classe[0]
+                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_classe)
+                    time.sleep(1)
+                    botao_classe.click()
+                    log_message("💾 Clicou em Salvar usando classe", "INFO")
+                    return
                 
                 # Listar todos os links/botões para debug
                 links = driver.find_elements(By.TAG_NAME, "a")
@@ -166,8 +292,12 @@ class ConclusaoModule(BaseModule):
                     link_id = link.get_attribute("id")
                     link_class = link.get_attribute("class")
                     link_text = link.text.strip()
-                    if link_id or "salvar" in link_class.lower() or "salvar" in link_text.lower():
-                        log_message(f"Link {i}: id='{link_id}', class='{link_class}', text='{link_text}'", "INFO")
+                    link_onclick = link.get_attribute("onclick")
+                    if (link_id and "salvar" in link_id.lower()) or \
+                       (link_class and "salvar" in link_class.lower()) or \
+                       (link_text and "salvar" in link_text.lower()) or \
+                       (link_onclick and "save" in link_onclick.lower()):
+                        log_message(f"Link {i}: id='{link_id}', class='{link_class}', text='{link_text}', onclick='{link_onclick}'", "INFO")
                         
             except Exception as debug_e:
                 log_message(f"Erro no debug de botões: {debug_e}", "ERROR")
@@ -299,6 +429,55 @@ class ConclusaoModule(BaseModule):
                 log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara})", "INFO")
                 
                 try:
+                    # Verificar se o browser ainda está ativo
+                    if not self.verificar_sessao_browser(driver):
+                        log_message("🔄 Recriando browser devido à sessão perdida...", "WARNING")
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                        
+                        # Recriar browser e fazer login novamente
+                        driver = BrowserFactory.create_chrome()
+                        wait = WebDriverWait(driver, 20)
+                        
+                        # Fazer login novamente
+                        log_message("🔄 Fazendo login novamente...", "INFO")
+                        driver.get(url)
+                        
+                        # Aguardar página carregar completamente
+                        wait.until(EC.presence_of_element_located((By.ID, "username")))
+                        time.sleep(2)
+                        
+                        username_field = driver.find_element(By.ID, "username")
+                        username_field.clear()
+                        username_field.send_keys(username)
+                        
+                        password_field = driver.find_element(By.ID, "password")
+                        password_field.clear()
+                        password_field.send_keys(password)
+                        
+                        submit_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                        submit_button.click()
+                        
+                        log_message("🔄 Navegando para módulo de exames novamente...", "INFO")
+                        
+                        # Navegar para o módulo de exames (módulo 1)
+                        modulo_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
+                        modulo_link.click()
+                        time.sleep(5)
+                        
+                        # Fechar modal se aparecer
+                        try:
+                            modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
+                            if modal_close_button.is_displayed():
+                                modal_close_button.click()
+                                time.sleep(1)
+                        except Exception:
+                            pass
+                        
+                        log_message("✅ Browser recriado e login realizado novamente", "SUCCESS")
+                    
                     # Processar este exame específico
                     resultado = self.processar_exame(driver, wait, codigo, mascara)
                     resultados.append({
@@ -334,6 +513,10 @@ class ConclusaoModule(BaseModule):
     def processar_exame(self, driver, wait, codigo, mascara):
         """Processa um exame individual"""
         try:
+            # Verificar se a sessão do browser ainda está ativa
+            if not self.verificar_sessao_browser(driver):
+                raise Exception("Sessão do browser perdida - necessário reiniciar")
+            
             # Aguardar e encontrar o campo de código de barras
             log_message("Aguardando página carregar completamente...", "INFO")
             time.sleep(3)
@@ -384,15 +567,22 @@ class ConclusaoModule(BaseModule):
             return self.aguardar_e_processar_andamento(driver, wait, mascara)
                 
         except Exception as e:
-            log_message(f"Erro ao processar exame {codigo}: {e}", "ERROR")
-            # Screenshot do erro
+            error_message = str(e)
+            log_message(f"Erro ao processar exame {codigo}: {error_message}", "ERROR")
+            
+            # Verificar se é erro de sessão inválida
+            if "invalid session id" in error_message.lower():
+                log_message("❌ Erro de sessão inválida detectado", "ERROR")
+                return {'status': 'erro_sessao', 'detalhes': 'Sessão do browser perdida'}
+            
+            # Screenshot do erro para outros tipos de erro
             try:
                 screenshot_path = f"erro_exame_{codigo}_{int(time.time())}.png"
                 driver.save_screenshot(screenshot_path)
                 log_message(f"Screenshot do erro salvo em: {screenshot_path}", "INFO")
             except:
                 pass
-            return {'status': 'erro', 'detalhes': str(e)}
+            return {'status': 'erro', 'detalhes': error_message}
 
     def interagir_com_campo_codigo(self, driver, campo_codigo, codigo):
         """Interage com o campo de código usando os métodos já implementados"""
@@ -524,7 +714,8 @@ class ConclusaoModule(BaseModule):
         sucesso = len([r for r in resultados if r['status'] == 'sucesso'])
         sem_svg = len([r for r in resultados if r['status'] == 'sem_svg'])
         sem_andamento = len([r for r in resultados if r['status'] == 'sem_andamento'])
-        erros = len([r for r in resultados if 'erro' in r['status']])
+        erro_sessao = len([r for r in resultados if r['status'] == 'erro_sessao'])
+        erros = len([r for r in resultados if 'erro' in r['status'] and r['status'] != 'erro_sessao'])
         
         log_message("\n" + "="*50, "INFO")
         log_message("RESUMO FINAL DO PROCESSAMENTO", "INFO")
@@ -533,10 +724,12 @@ class ConclusaoModule(BaseModule):
         log_message(f"✅ Processados com sucesso: {sucesso}", "SUCCESS")
         log_message(f"⚠️ Sem SVG (não estão em conclusão): {sem_svg}", "WARNING")
         log_message(f"⚠️ Exames não encontrados: {sem_andamento}", "WARNING")
-        log_message(f"❌ Erros de processamento: {erros}", "ERROR")
+        log_message(f"🔄 Erros de sessão (browser perdido): {erro_sessao}", "WARNING")
+        log_message(f"❌ Outros erros de processamento: {erros}", "ERROR")
         
         # Mostrar detalhes dos erros se houver
-        if erros > 0:
+        erros_totais = erro_sessao + erros
+        if erros_totais > 0:
             log_message("\nDetalhes dos erros:", "ERROR")
             for r in resultados:
                 if 'erro' in r['status']:
@@ -548,7 +741,8 @@ class ConclusaoModule(BaseModule):
             f"Sucesso: {sucesso}\n"
             f"Sem SVG: {sem_svg}\n"
             f"Não encontrados: {sem_andamento}\n"
-            f"Erros: {erros}")
+            f"Erros de sessão: {erro_sessao}\n"
+            f"Outros erros: {erros}")
 
 def run(params: dict):
     module = ConclusaoModule()
