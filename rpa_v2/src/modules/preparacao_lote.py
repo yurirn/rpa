@@ -55,7 +55,7 @@ class PreparacaoLoteModule(BaseModule):
             driver.find_element(By.ID, "password").send_keys(password)
             driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
             wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']"))).click()
-            time.sleep(3)
+            time.sleep(2)
             try:
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
@@ -66,7 +66,7 @@ class PreparacaoLoteModule(BaseModule):
             wait.until(EC.element_to_be_clickable((
                 By.XPATH, "//a[contains(@class, 'setupAjax') and contains(text(), 'Preparar exames para fatura')]"
             ))).click()
-            time.sleep(2)
+            time.sleep(1)
             for exame in exames_unicos:
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
@@ -78,8 +78,16 @@ class PreparacaoLoteModule(BaseModule):
                     campo_exame.clear()
                     campo_exame.send_keys(exame)
                     wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento"))).click()
-                    time.sleep(2)
-                    # Verificação para ambos os modos
+                    try:
+                        modal_carregando = driver.find_element(By.XPATH,
+                            "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
+                        if modal_carregando.is_displayed():
+                            log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
+                            WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                            log_message("✅ Modal de carregamento fechado", "INFO")
+                    except Exception:
+                        log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
+                    time.sleep(1)
                     try:
                         tbody_rows = driver.find_elements(By.CSS_SELECTOR, "#tabelaPreFaturamentoTbody tr")
                         if len(tbody_rows) == 0:
