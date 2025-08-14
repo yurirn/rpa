@@ -61,6 +61,17 @@ class UnimedUploader(BaseModule):
         log_message("Enviando arquivo para Unimed...", "INFO")
         botao_enviar = self.wait.until(EC.element_to_be_clickable((By.ID, "enviar2")))
         botao_enviar.click()
+        time.sleep(2)
+        try:
+            form_erro = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//form[contains(@action, 'relatorioErroXml.php')]"))
+            )
+            visualizar_link = form_erro.find_element(By.XPATH, ".//a[contains(text(), 'Visualizar erros')]")
+            visualizar_link.click()
+            log_message("Arquivo processado com erros. Baixando relatório de erros (PDF)...", "ERROR")
+            time.sleep(1)
+        except Exception:
+            log_message("Arquivo enviado e processado sem erros.", "SUCCESS")
 
     def fechar(self):
         if self.driver:
@@ -175,7 +186,7 @@ class XMLGeneratorAutomation(BaseModule):
         )
         botao.click()
 
-    def aguardar_download_completar(self, timeout_download=120):
+    def aguardar_download_completar(self, timeout_download=150):
         log_message("Aguardando download do arquivo XML/ZIP...", "INFO")
         arquivos_antes = set(os.listdir(self.pasta_download))
         tempo_limite = time.time() + timeout_download
