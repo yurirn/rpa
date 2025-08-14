@@ -234,12 +234,7 @@ class ConclusaoModule(BaseModule):
                 messagebox.showerror("Erro", "Nenhum dado de exame encontrado na planilha.")
                 return
             
-            # Pega apenas o primeiro exame
-            primeiro_exame = dados_exames[0]
-            codigo = primeiro_exame['codigo']
-            mascara = primeiro_exame['mascara']
-            
-            log_message(f"Processando código: {codigo} com máscara: {mascara}", "INFO")
+            log_message(f"Encontrados {len(dados_exames)} exames para processar", "INFO")
             
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
@@ -247,10 +242,11 @@ class ConclusaoModule(BaseModule):
 
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
         driver = None
+        resultados = []
         
         try:
             driver = BrowserFactory.create_chrome()
-            wait = WebDriverWait(driver, 20)  # Aumentei o timeout
+            wait = WebDriverWait(driver, 20)
             
             log_message("Iniciando automação de conclusão...", "INFO")
             
@@ -278,7 +274,7 @@ class ConclusaoModule(BaseModule):
             # Navegar para o módulo de exames (módulo 1)
             modulo_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
             modulo_link.click()
-            time.sleep(5)  # Aguardar carregamento do módulo
+            time.sleep(5)
             
             # Fechar modal se aparecer
             try:
@@ -289,169 +285,40 @@ class ConclusaoModule(BaseModule):
             except Exception:
                 pass
 
-            log_message("✅ Login realizado com sucesso. Processando código.", "SUCCESS")
+            log_message("✅ Login realizado com sucesso. Iniciando processamento dos exames.", "SUCCESS")
             
-            # Processar o código
-            log_message(f"➡️ Digitando código: {codigo}", "INFO")
-            
-            # Aguardar e encontrar o campo de código de barras
-            try:
-                # Primeiro, aguardar a página carregar completamente
-                log_message("Aguardando página carregar completamente...", "INFO")
-                time.sleep(3)
+            # Processar cada exame da planilha
+            for i, exame_data in enumerate(dados_exames, 1):
+                if cancel_flag and cancel_flag.is_set():
+                    log_message("Execução cancelada pelo usuário.", "WARNING")
+                    break
                 
-                # Tentar diferentes formas de encontrar o campo
-                campo_codigo = None
+                codigo = exame_data['codigo']
+                mascara = exame_data['mascara']
                 
-                # Método 1: Por ID
+                log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara})", "INFO")
+                
                 try:
-                    campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
-                    log_message("✅ Campo encontrado pelo ID", "INFO")
-                except:
-                    log_message("⚠️ Campo não encontrado pelo ID", "WARNING")
-                
-                # Método 2: Por atributos se o ID não funcionou
-                if not campo_codigo:
-                    try:
-                        campo_codigo = driver.find_element(By.XPATH, "//input[@placeholder='Leitor de código de barras']")
-                        log_message("✅ Campo encontrado pelo placeholder", "INFO")
-                    except:
-                        log_message("⚠️ Campo não encontrado pelo placeholder", "WARNING")
-                
-                # Método 3: Por nome se ainda não encontrou
-                if not campo_codigo:
-                    try:
-                        campo_codigo = driver.find_element(By.NAME, "barcode")
-                        log_message("✅ Campo encontrado pelo name", "INFO")
-                    except:
-                        log_message("⚠️ Campo não encontrado pelo name", "WARNING")
-                
-                # Se ainda não encontrou, listar todos os inputs para debug
-                if not campo_codigo:
-                    log_message("❌ Campo não encontrado. Listando inputs disponíveis:", "ERROR")
-                    inputs = driver.find_elements(By.TAG_NAME, "input")
-                    for i, inp in enumerate(inputs):
-                        input_id = inp.get_attribute("id") or "sem_id"
-                        input_name = inp.get_attribute("name") or "sem_name"
-                        input_placeholder = inp.get_attribute("placeholder") or "sem_placeholder"
-                        input_type = inp.get_attribute("type") or "sem_type"
-                        log_message(f"Input {i}: id='{input_id}', name='{input_name}', placeholder='{input_placeholder}', type='{input_type}'", "INFO")
+                    # Processar este exame específico
+                    resultado = self.processar_exame(driver, wait, codigo, mascara)
+                    resultados.append({
+                        'codigo': codigo,
+                        'mascara': mascara,
+                        'status': resultado['status'],
+                        'detalhes': resultado.get('detalhes', '')
+                    })
                     
-                    raise Exception("Campo de código de barras não encontrado")
-                
-                # Se encontrou o campo, interagir com ele
-                if campo_codigo:
-                    log_message("Campo de código encontrado, interagindo...", "INFO")
-                    
-                    # Garantir que o campo está visível
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", campo_codigo)
-                    time.sleep(1)
-                    
-                    # Tentar focar no campo
-                    try:
-                        campo_codigo.click()
-                        log_message("Campo clicado com sucesso", "INFO")
-                    except Exception as click_error:
-                        log_message(f"Erro ao clicar no campo: {click_error}", "WARNING")
-                    
-                    time.sleep(0.5)
-                    
-                    # Limpar o campo
-                    try:
-                        campo_codigo.clear()
-                        log_message("Campo limpo com sucesso", "INFO")
-                    except Exception as clear_error:
-                        log_message(f"Erro ao limpar campo: {clear_error}", "WARNING")
-                    
-                    time.sleep(0.5)
-                    
-                    # Digitar o código
-                    try:
-                        campo_codigo.send_keys(codigo)
-                        log_message(f"Código '{codigo}' digitado com sucesso", "INFO")
-                    except Exception as type_error:
-                        log_message(f"Erro ao digitar código: {type_error}", "ERROR")
-                        raise
-                    
-                    time.sleep(1)
-                    
-                    # Pressionar Enter
-                    try:
-                        campo_codigo.send_keys(Keys.ENTER)
-                        log_message("⌨️ Enter pressionado com sucesso", "INFO")
-                    except Exception as enter_error:
-                        log_message(f"Erro ao pressionar Enter: {enter_error}", "ERROR")
-                        raise
-                    
-                    # Aguardar processamento
-                    log_message("Aguardando processamento do sistema...", "INFO")
-                    time.sleep(5)
-                
-            except Exception as e:
-                log_message(f"Erro ao processar campo de código: {e}", "ERROR")
-                # Fazer screenshot para debug
-                try:
-                    screenshot_path = f"erro_campo_codigo_{int(time.time())}.png"
-                    driver.save_screenshot(screenshot_path)
-                    log_message(f"Screenshot do erro salvo em: {screenshot_path}", "INFO")
-                except Exception as screenshot_error:
-                    log_message(f"Erro ao salvar screenshot: {screenshot_error}", "WARNING")
-                raise
+                except Exception as e:
+                    log_message(f"❌ Erro ao processar exame {codigo}: {e}", "ERROR")
+                    resultados.append({
+                        'codigo': codigo,
+                        'mascara': mascara,
+                        'status': 'erro',
+                        'detalhes': str(e)
+                    })
             
-            # Verificar se apareceu a div de andamento do exame
-            try:
-                log_message("Aguardando div de andamento do exame...", "INFO")
-                andamento_div = wait.until(EC.presence_of_element_located((By.ID, "divAndamentoExame")))
-                log_message("📋 Div de andamento do exame encontrada", "INFO")
-                
-                # Aguardar um pouco mais para garantir que a div está completamente carregada
-                time.sleep(3)
-                
-                # Verificar se tem SVG na conclusão
-                if self.verificar_svg_conclusao(driver):
-                    log_message("✅ SVG encontrado na etapa Conclusão - iniciando processo", "SUCCESS")
-                    
-                    try:
-                        # Clicar na etapa Conclusão
-                        self.clicar_conclusao(driver, wait)
-                        
-                        # Digitar a máscara e buscar
-                        if mascara:
-                            self.digitar_mascara_e_buscar(driver, wait, mascara)
-                        else:
-                            log_message("⚠️ Nenhuma máscara encontrada, pulando busca", "WARNING")
-                        
-                        # Salvar
-                        self.salvar_conclusao(driver, wait)
-                        
-                        # Enviar para próxima etapa
-                        self.enviar_proxima_etapa(driver, wait)
-                        
-                        # Assinar com Dr. George
-                        self.assinar_com_george(driver, wait)
-                        
-                        log_message("🎉 Processo de conclusão finalizado com sucesso!", "SUCCESS")
-                        
-                    except Exception as processo_erro:
-                        log_message(f"Erro durante o processo de conclusão: {processo_erro}", "ERROR")
-                        raise
-                    
-                else:
-                    log_message("⚠️ SVG não encontrado na etapa Conclusão - fechando exame", "WARNING")
-                    self.fechar_exame(driver, wait)
-                    
-            except Exception as e:
-                log_message(f"❌ Erro ao verificar andamento do exame: {e}", "ERROR")
-                # Fazer screenshot para debug
-                try:
-                    screenshot_path = f"erro_screenshot_{int(time.time())}.png"
-                    driver.save_screenshot(screenshot_path)
-                    log_message(f"Screenshot salvo em: {screenshot_path}", "INFO")
-                except:
-                    pass
-                raise
-            
-            messagebox.showinfo("Conclusão", f"✅ Código {codigo} processado!")
+            # Mostrar resumo final
+            self.mostrar_resumo_final(resultados)
             
         except Exception as e:
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
@@ -463,6 +330,225 @@ class ConclusaoModule(BaseModule):
                     log_message("Browser fechado", "INFO")
                 except Exception as quit_error:
                     log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
+
+    def processar_exame(self, driver, wait, codigo, mascara):
+        """Processa um exame individual"""
+        try:
+            # Aguardar e encontrar o campo de código de barras
+            log_message("Aguardando página carregar completamente...", "INFO")
+            time.sleep(3)
+            
+            # Tentar diferentes formas de encontrar o campo
+            campo_codigo = None
+            
+            # Método 1: Por ID
+            try:
+                campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
+                log_message("✅ Campo encontrado pelo ID", "INFO")
+            except:
+                log_message("⚠️ Campo não encontrado pelo ID", "WARNING")
+            
+            # Método 2: Por atributos se o ID não funcionou
+            if not campo_codigo:
+                try:
+                    campo_codigo = driver.find_element(By.XPATH, "//input[@placeholder='Leitor de código de barras']")
+                    log_message("✅ Campo encontrado pelo placeholder", "INFO")
+                except:
+                    log_message("⚠️ Campo não encontrado pelo placeholder", "WARNING")
+            
+            # Método 3: Por nome se ainda não encontrou
+            if not campo_codigo:
+                try:
+                    campo_codigo = driver.find_element(By.NAME, "barcode")
+                    log_message("✅ Campo encontrado pelo name", "INFO")
+                except:
+                    log_message("⚠️ Campo não encontrado pelo name", "WARNING")
+            
+            # Se ainda não encontrou, listar todos os inputs para debug
+            if not campo_codigo:
+                log_message("❌ Campo não encontrado. Listando inputs disponíveis:", "ERROR")
+                inputs = driver.find_elements(By.TAG_NAME, "input")
+                for i, inp in enumerate(inputs):
+                    input_id = inp.get_attribute("id") or "sem_id"
+                    input_name = inp.get_attribute("name") or "sem_name"
+                    input_placeholder = inp.get_attribute("placeholder") or "sem_placeholder"
+                    input_type = inp.get_attribute("type") or "sem_type"
+                    log_message(f"Input {i}: id='{input_id}', name='{input_name}', placeholder='{input_placeholder}', type='{input_type}'", "INFO")
+                
+                raise Exception("Campo de código de barras não encontrado")
+            
+            # Interagir com o campo usando os métodos já implementados
+            self.interagir_com_campo_codigo(driver, campo_codigo, codigo)
+            
+            # Aguardar div de andamento aparecer
+            return self.aguardar_e_processar_andamento(driver, wait, mascara)
+                
+        except Exception as e:
+            log_message(f"Erro ao processar exame {codigo}: {e}", "ERROR")
+            # Screenshot do erro
+            try:
+                screenshot_path = f"erro_exame_{codigo}_{int(time.time())}.png"
+                driver.save_screenshot(screenshot_path)
+                log_message(f"Screenshot do erro salvo em: {screenshot_path}", "INFO")
+            except:
+                pass
+            return {'status': 'erro', 'detalhes': str(e)}
+
+    def interagir_com_campo_codigo(self, driver, campo_codigo, codigo):
+        """Interage com o campo de código usando os métodos já implementados"""
+        log_message("Campo de código encontrado, interagindo...", "INFO")
+        
+        # Garantir que o campo está visível
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", campo_codigo)
+        time.sleep(1)
+        
+        # Verificar se o elemento está visível e habilitado
+        is_displayed = campo_codigo.is_displayed()
+        is_enabled = campo_codigo.is_enabled()
+        log_message(f"Campo - Visível: {is_displayed}, Habilitado: {is_enabled}", "INFO")
+        
+        # Limpar o campo primeiro
+        try:
+            campo_codigo.clear()
+            log_message("Campo limpo com sucesso", "INFO")
+        except:
+            driver.execute_script("arguments[0].value = '';", campo_codigo)
+            log_message("Campo limpo com JavaScript", "INFO")
+        
+        time.sleep(0.5)
+        
+        # Digitar o código
+        try:
+            campo_codigo.send_keys(codigo)
+            log_message(f"Código '{codigo}' digitado com sucesso", "INFO")
+        except:
+            driver.execute_script(f"arguments[0].value = '{codigo}';", campo_codigo)
+            driver.execute_script("""
+                var element = arguments[0];
+                var event = new Event('input', { bubbles: true });
+                element.dispatchEvent(event);
+            """, campo_codigo)
+            log_message(f"Código '{codigo}' digitado com JavaScript", "INFO")
+        
+        time.sleep(1)
+        
+        # Pressionar Enter
+        try:
+            campo_codigo.send_keys(Keys.ENTER)
+            log_message("⌨️ Enter pressionado com sucesso", "INFO")
+        except:
+            driver.execute_script("""
+                var element = arguments[0];
+                var event = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    bubbles: true
+                });
+                element.dispatchEvent(event);
+            """, campo_codigo)
+            log_message("⌨️ Enter pressionado com JavaScript", "INFO")
+
+    def aguardar_e_processar_andamento(self, driver, wait, mascara):
+        """Aguarda a div de andamento e processa o exame"""
+        log_message("Aguardando div de andamento do exame aparecer...", "INFO")
+        
+        # Aguardar mais tempo para o carregamento após digitar o código
+        timeout_andamento = 30
+        inicio = time.time()
+        
+        while time.time() - inicio < timeout_andamento:
+            try:
+                # Verificar se a div de andamento apareceu
+                andamento_div = driver.find_element(By.ID, "divAndamentoExame")
+                if andamento_div and andamento_div.is_displayed():
+                    log_message("📋 Div de andamento do exame encontrada!", "SUCCESS")
+                    break
+            except:
+                pass
+            
+            time.sleep(1)
+            if int(time.time() - inicio) % 5 == 0:  # Log a cada 5 segundos
+                log_message(f"⏳ Aguardando carregamento... ({int(time.time() - inicio)}s)", "INFO")
+        else:
+            log_message("⚠️ Div de andamento não apareceu no tempo esperado", "WARNING")
+            return {'status': 'sem_andamento', 'detalhes': 'Exame não encontrado ou não carregou'}
+        
+        # Aguardar carregamento completo
+        time.sleep(3)
+        
+        # Verificar se tem SVG na conclusão
+        if self.verificar_svg_conclusao(driver):
+            log_message("✅ SVG encontrado na etapa Conclusão - iniciando processo", "SUCCESS")
+            return self.processar_conclusao_completa(driver, wait, mascara)
+        else:
+            log_message("⚠️ SVG não encontrado na etapa Conclusão - fechando exame", "WARNING")
+            self.fechar_exame(driver, wait)
+            return {'status': 'sem_svg', 'detalhes': 'Exame não está na etapa de conclusão'}
+
+    def processar_conclusao_completa(self, driver, wait, mascara):
+        """Processa a conclusão completa do exame"""
+        try:
+            # Clicar na etapa Conclusão
+            self.clicar_conclusao(driver, wait)
+            
+            # Aguardar carregamento da tela de conclusão
+            log_message("Aguardando tela de conclusão carregar completamente...", "INFO")
+            time.sleep(5)
+            
+            # Digitar a máscara e buscar
+            if mascara:
+                self.digitar_mascara_e_buscar(driver, wait, mascara)
+            else:
+                log_message("⚠️ Nenhuma máscara encontrada, pulando busca", "WARNING")
+            
+            # Salvar
+            self.salvar_conclusao(driver, wait)
+            
+            # Enviar para próxima etapa
+            self.enviar_proxima_etapa(driver, wait)
+            
+            # Assinar com Dr. George
+            self.assinar_com_george(driver, wait)
+            
+            log_message("🎉 Processo de conclusão finalizado com sucesso!", "SUCCESS")
+            return {'status': 'sucesso', 'detalhes': 'Conclusão processada e assinada'}
+            
+        except Exception as e:
+            log_message(f"Erro durante processo de conclusão: {e}", "ERROR")
+            return {'status': 'erro_conclusao', 'detalhes': str(e)}
+
+    def mostrar_resumo_final(self, resultados):
+        """Mostra o resumo final do processamento"""
+        total = len(resultados)
+        sucesso = len([r for r in resultados if r['status'] == 'sucesso'])
+        sem_svg = len([r for r in resultados if r['status'] == 'sem_svg'])
+        sem_andamento = len([r for r in resultados if r['status'] == 'sem_andamento'])
+        erros = len([r for r in resultados if 'erro' in r['status']])
+        
+        log_message("\n" + "="*50, "INFO")
+        log_message("RESUMO FINAL DO PROCESSAMENTO", "INFO")
+        log_message("="*50, "INFO")
+        log_message(f"Total de exames: {total}", "INFO")
+        log_message(f"✅ Processados com sucesso: {sucesso}", "SUCCESS")
+        log_message(f"⚠️ Sem SVG (não estão em conclusão): {sem_svg}", "WARNING")
+        log_message(f"⚠️ Exames não encontrados: {sem_andamento}", "WARNING")
+        log_message(f"❌ Erros de processamento: {erros}", "ERROR")
+        
+        # Mostrar detalhes dos erros se houver
+        if erros > 0:
+            log_message("\nDetalhes dos erros:", "ERROR")
+            for r in resultados:
+                if 'erro' in r['status']:
+                    log_message(f"- {r['codigo']}: {r['detalhes']}", "ERROR")
+        
+        messagebox.showinfo("Processamento Concluído", 
+            f"✅ Processamento finalizado!\n\n"
+            f"Total: {total}\n"
+            f"Sucesso: {sucesso}\n"
+            f"Sem SVG: {sem_svg}\n"
+            f"Não encontrados: {sem_andamento}\n"
+            f"Erros: {erros}")
 
 def run(params: dict):
     module = ConclusaoModule()
