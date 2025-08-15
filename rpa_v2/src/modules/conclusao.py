@@ -20,7 +20,6 @@ class ConclusaoModule(BaseModule):
         super().__init__(nome="Conclusão")
 
     def get_dados_exames(self, file_path: str) -> list:
-        """Lê os códigos de exames da coluna A e máscaras da coluna B, começando da linha 2"""
         try:
             workbook = load_workbook(file_path)
             sheet = workbook.active
@@ -140,30 +139,6 @@ class ConclusaoModule(BaseModule):
                     
         except Exception as e:
             log_message(f"Erro ao fechar exame: {e}", "ERROR")
-
-    def clicar_conclusao(self, driver, wait):
-        """Clica no link de Conclusão"""
-        try:
-            # Clicar diretamente no link de Conclusão (não no SVG)
-            conclusao_link = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//a[@data-id='C' and contains(., 'Conclusão')]"))
-            )
-            conclusao_link.click()
-            log_message("🎯 Clicou na etapa Conclusão", "INFO")
-            
-            # Aguardar mais tempo para a página carregar
-            time.sleep(4)
-            
-            # Aguardar especificamente o campo buscaArvore aparecer
-            try:
-                wait.until(EC.presence_of_element_located((By.ID, "buscaArvore")))
-                log_message("✅ Campo buscaArvore encontrado", "INFO")
-            except Exception as e:
-                log_message(f"⚠️ Campo buscaArvore não encontrado: {e}", "WARNING")
-                
-        except Exception as e:
-            log_message(f"Erro ao clicar na conclusão: {e}", "ERROR")
-            raise
 
     def digitar_mascara_e_buscar(self, driver, wait, mascara):
         """Digita a máscara no campo buscaArvore e pressiona Enter"""
@@ -676,13 +651,6 @@ class ConclusaoModule(BaseModule):
     def processar_conclusao_completa(self, driver, wait, mascara):
         """Processa a conclusão completa do exame"""
         try:
-            # Clicar na etapa Conclusão
-            self.clicar_conclusao(driver, wait)
-            
-            # Aguardar carregamento da tela de conclusão
-            log_message("Aguardando tela de conclusão carregar completamente...", "INFO")
-            time.sleep(3)
-            
             # Digitar a máscara e buscar
             if mascara:
                 self.digitar_mascara_e_buscar(driver, wait, mascara)
@@ -693,10 +661,10 @@ class ConclusaoModule(BaseModule):
             self.salvar_conclusao(driver, wait)
             
             # Enviar para próxima etapa
-            #self.enviar_proxima_etapa(driver, wait)
+            self.enviar_proxima_etapa(driver, wait)
             
             # Assinar com Dr. George
-            #self.assinar_com_george(driver, wait)
+            self.assinar_com_george(driver, wait)
             
             log_message("🎉 Processo de conclusão finalizado com sucesso!", "SUCCESS")
             return {'status': 'sucesso', 'detalhes': 'Conclusão processada e assinada'}
