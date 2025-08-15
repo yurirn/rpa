@@ -153,18 +153,10 @@ class ConclusaoModule(BaseModule):
                 log_message("⚠️ Campo buscaArvore não está visível", "WARNING")
                 return
             
-            # Rolar até o campo para garantir visibilidade
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", campo_busca)
-            time.sleep(1)
-            
-            # Focar no campo primeiro
-            campo_busca.click()
-            time.sleep(0.5)
-            
             # Digitar a máscara
             campo_busca.send_keys(mascara)
             log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "INFO")
-            time.sleep(1)
+            time.sleep(0.5)
             
             # Pressionar Enter
             campo_busca.send_keys(Keys.ENTER)
@@ -303,7 +295,7 @@ class ConclusaoModule(BaseModule):
             )
             campo_senha.send_keys("1323")
             log_message("🔐 Senha digitada", "INFO")
-            time.sleep(2)
+            time.sleep(1)
             
             # Clicar no botão Assinar
             botao_assinar = wait.until(
