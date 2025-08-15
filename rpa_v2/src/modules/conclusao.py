@@ -161,14 +161,6 @@ class ConclusaoModule(BaseModule):
             campo_busca.click()
             time.sleep(0.5)
             
-            # Limpar o campo
-            campo_busca.clear()
-            time.sleep(0.5)
-            
-            # Alternativa de limpeza se clear() não funcionar
-            driver.execute_script("arguments[0].value = '';", campo_busca)
-            time.sleep(0.5)
-            
             # Digitar a máscara
             campo_busca.send_keys(mascara)
             log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "INFO")
@@ -177,7 +169,7 @@ class ConclusaoModule(BaseModule):
             # Pressionar Enter
             campo_busca.send_keys(Keys.ENTER)
             log_message(f"⌨️ Enter pressionado após digitar máscara", "INFO")
-            time.sleep(1.5)
+            time.sleep(1)
             
         except Exception as e:
             log_message(f"Erro ao digitar máscara: {e}", "ERROR")
@@ -229,7 +221,7 @@ class ConclusaoModule(BaseModule):
             # Clicar no botão
             botao_salvar.click()
             log_message("💾 Clicou em Salvar", "INFO")
-            time.sleep(1.5)
+            time.sleep(1)
             
         except Exception as e:
             log_message(f"Erro ao salvar: {e}", "ERROR")
@@ -285,7 +277,7 @@ class ConclusaoModule(BaseModule):
             )
             botao_enviar.click()
             log_message("➡️ Clicou em Enviar para próxima etapa", "INFO")
-            time.sleep(3)
+            time.sleep(1.5)
         except Exception as e:
             log_message(f"Erro ao enviar para próxima etapa: {e}", "ERROR")
             raise
@@ -319,7 +311,7 @@ class ConclusaoModule(BaseModule):
             )
             botao_assinar.click()
             log_message("✍️ Clicou em Assinar", "INFO")
-            time.sleep(3)
+            time.sleep(1.5)
             
         except Exception as e:
             log_message(f"Erro no processo de assinatura: {e}", "ERROR")
