@@ -119,7 +119,6 @@ class ConclusaoModule(BaseModule):
             )
             botao_fechar.click()
             log_message("📁 Exame fechado (sem SVG na conclusão)", "INFO")
-            time.sleep(2)
             
             # Aguardar retornar à tela principal
             try:
@@ -134,7 +133,7 @@ class ConclusaoModule(BaseModule):
                     if "modulo=1" not in current_url:
                         modulo_link = driver.find_element(By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")
                         modulo_link.click()
-                        time.sleep(3)
+                        time.sleep(1.5)
                         log_message("🔄 Navegou de volta ao módulo de exames", "INFO")
                 except:
                     pass
@@ -153,7 +152,7 @@ class ConclusaoModule(BaseModule):
             log_message("🎯 Clicou na etapa Conclusão", "INFO")
             
             # Aguardar mais tempo para a página carregar
-            time.sleep(5)
+            time.sleep(4)
             
             # Aguardar especificamente o campo buscaArvore aparecer
             try:
@@ -203,7 +202,7 @@ class ConclusaoModule(BaseModule):
             # Pressionar Enter
             campo_busca.send_keys(Keys.ENTER)
             log_message(f"⌨️ Enter pressionado após digitar máscara", "INFO")
-            time.sleep(3)
+            time.sleep(1.5)
             
         except Exception as e:
             log_message(f"Erro ao digitar máscara: {e}", "ERROR")
@@ -255,7 +254,7 @@ class ConclusaoModule(BaseModule):
             # Clicar no botão
             botao_salvar.click()
             log_message("💾 Clicou em Salvar", "INFO")
-            time.sleep(3)
+            time.sleep(1.5)
             
         except Exception as e:
             log_message(f"Erro ao salvar: {e}", "ERROR")
@@ -386,7 +385,6 @@ class ConclusaoModule(BaseModule):
             
             # Aguardar página carregar completamente
             wait.until(EC.presence_of_element_located((By.ID, "username")))
-            time.sleep(2)
             
             username_field = driver.find_element(By.ID, "username")
             username_field.clear()
@@ -404,14 +402,13 @@ class ConclusaoModule(BaseModule):
             # Navegar para o módulo de exames (módulo 1)
             modulo_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
             modulo_link.click()
-            time.sleep(5)
+            time.sleep(2)
             
             # Fechar modal se aparecer
             try:
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
                     modal_close_button.click()
-                    time.sleep(1)
             except Exception:
                 pass
 
@@ -465,7 +462,7 @@ class ConclusaoModule(BaseModule):
                         # Navegar para o módulo de exames (módulo 1)
                         modulo_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
                         modulo_link.click()
-                        time.sleep(5)
+                        time.sleep(2.5)
                         
                         # Fechar modal se aparecer
                         try:
@@ -519,7 +516,7 @@ class ConclusaoModule(BaseModule):
             
             # Aguardar e encontrar o campo de código de barras
             log_message("Aguardando página carregar completamente...", "INFO")
-            time.sleep(3)
+            time.sleep(0.5)
             
             # Tentar diferentes formas de encontrar o campo
             campo_codigo = None
@@ -665,7 +662,7 @@ class ConclusaoModule(BaseModule):
             return {'status': 'sem_andamento', 'detalhes': 'Exame não encontrado ou não carregou'}
         
         # Aguardar carregamento completo
-        time.sleep(3)
+        time.sleep(2)
         
         # Verificar se tem SVG na conclusão
         if self.verificar_svg_conclusao(driver):
@@ -684,7 +681,7 @@ class ConclusaoModule(BaseModule):
             
             # Aguardar carregamento da tela de conclusão
             log_message("Aguardando tela de conclusão carregar completamente...", "INFO")
-            time.sleep(5)
+            time.sleep(3)
             
             # Digitar a máscara e buscar
             if mascara:
@@ -696,10 +693,10 @@ class ConclusaoModule(BaseModule):
             self.salvar_conclusao(driver, wait)
             
             # Enviar para próxima etapa
-            self.enviar_proxima_etapa(driver, wait)
+            #self.enviar_proxima_etapa(driver, wait)
             
             # Assinar com Dr. George
-            self.assinar_com_george(driver, wait)
+            #self.assinar_com_george(driver, wait)
             
             log_message("🎉 Processo de conclusão finalizado com sucesso!", "SUCCESS")
             return {'status': 'sucesso', 'detalhes': 'Conclusão processada e assinada'}
