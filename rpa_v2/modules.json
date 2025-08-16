@@ -38,5 +38,13 @@
     "module_path": "modules.conclusao",
     "requires_excel": true,
     "has_gera_xml_tiss": false
+  },
+  {
+    "id": "macroscopia",
+    "name": "Preenchimento Macroscopia",
+    "description": "Faz o preenchimento de macroscopia dos exames",
+    "module_path": "modules.macroscopia",
+    "requires_excel": true,
+    "has_gera_xml_tiss": false
   }
 ]

@@ -15,13 +15,13 @@ class BrowserFactory:
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--allow-running-insecure-content")
         chrome_options.add_argument("--start-maximized")
+        #chrome_options.add_argument("--headless=new")
         
         # Adicionar argumentos para resolver problemas comuns
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        #chrome_options.add_argument("--headless=new")
+
         if download_dir:
             prefs = {
                 "download.default_directory": download_dir,
