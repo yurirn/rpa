@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Action Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 70vh;
+        }
+
+        .recorder-panel {
+            padding: 30px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+        }
+
+        .output-panel {
+            padding: 30px;
+            background: white;
+        }
+
+        .panel-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.recording {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status.stopped {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #b8daff;
+        }
+
+        .actions-list {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .action-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s ease;
+        }
+
+        .action-item:hover {
+            background: #f8f9fa;
+        }
+
+        .action-item:last-child {
+            border-bottom: none;
+        }
+
+        .action-info {
+            flex: 1;
+        }
+
+        .action-type {
+            font-weight: 500;
+            color: #667eea;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+
+        .action-details {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 2px;
+        }
+
+        .variable-btn {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+
+        .output-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-size: 1em;
+        }
+
+        .tab.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .iframe-container {
+            margin-top: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .iframe-container iframe {
+            width: 100%;
+            height: 400px;
+            border: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .recording .status {
+            animation: pulse 2s infinite;
+        }
+
+        .highlight {
+            outline: 3px solid #ff6b6b !important;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Bot Action Recorder</h1>
+            <p>Grave suas ações e transforme em automação reutilizável</p>
+        </div>
+
+        <div class="main-content">
+            <div class="recorder-panel">
+                <div class="panel-title">
+                    🎬 Gravador de Ações
+                </div>
+
+                <div class="input-group">
+                    <label for="sequenceName">Nome da Sequência:</label>
+                    <input type="text" id="sequenceName" placeholder="Ex: Login Sistema X" value="Nova Sequência">
+                </div>
+
+                <div class="control-group">
+                    <button class="btn btn-primary" id="startRecording">▶️ Iniciar Gravação</button>
+                    <button class="btn btn-danger" id="stopRecording" disabled>⏹️ Parar Gravação</button>
+                    <button class="btn btn-secondary" id="clearActions">🗑️ Limpar</button>
+                </div>
+
+                <div class="status stopped" id="status">
+                    ⏸️ Gravação parada - Clique em "Iniciar Gravação"
+                </div>
+
+                <div class="panel-title">
+                    📝 Ações Gravadas
+                </div>
+
+                <div class="actions-list" id="actionsList">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        Nenhuma ação gravada ainda
+                    </div>
+                </div>
+
+                <div class="iframe-container">
+                    <iframe id="testIframe" src="https://pathoweb.com.br/login/auth"></iframe>
+                </div>
+            </div>
+
+            <div class="output-panel">
+                <div class="panel-title">
+                    📄 Código Gerado
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" id="jsonTab">JSON</button>
+                    <button class="tab" id="markdownTab">Markdown</button>
+                    <button class="tab" id="pythonTab">Python</button>
+                </div>
+
+                <div class="control-group">
+                    <button class="btn btn-success" id="exportJson">💾 Exportar JSON</button>
+                    <button class="btn btn-success" id="exportMarkdown">📝 Exportar Markdown</button>
+                    <button class="btn btn-primary" id="playback">▶️ Executar Sequência</button>
+                </div>
+
+                <div class="output-area" id="outputArea">
+                    Inicie uma gravação para ver o código gerado aqui...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class BotRecorder {
+            constructor() {
+                this.isRecording = false;
+                this.actions = [];
+                this.currentSequenceName = 'Nova Sequência';
+                this.variableCounter = 1;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.setupIframeListeners();
+            }
+
+            initializeElements() {
+                this.startBtn = document.getElementById('startRecording');
+                this.stopBtn = document.getElementById('stopRecording');
+                this.clearBtn = document.getElementById('clearActions');
+                this.status = document.getElementById('status');
+                this.actionsList = document.getElementById('actionsList');
+                this.outputArea = document.getElementById('outputArea');
+                this.sequenceNameInput = document.getElementById('sequenceName');
+                this.testIframe = document.getElementById('testIframe');
+            }
+
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.clearBtn.addEventListener('click', () => this.clearActions());
+                
+                this.sequenceNameInput.addEventListener('change', (e) => {
+                    this.currentSequenceName = e.target.value;
+                    this.updateOutput();
+                });
+
+                // Tabs
+                document.getElementById('jsonTab').addEventListener('click', () => this.switchTab('json'));
+                document.getElementById('markdownTab').addEventListener('click', () => this.switchTab('markdown'));
+                document.getElementById('pythonTab').addEventListener('click', () => this.switchTab('python'));
+
+                // Export buttons
+                document.getElementById('exportJson').addEventListener('click', () => this.exportJson());
+                document.getElementById('exportMarkdown').addEventListener('click', () => this.exportMarkdown());
+                document.getElementById('playback').addEventListener('click', () => this.playbackSequence());
+            }
+
+            setupIframeListeners() {
+                this.testIframe.addEventListener('load', () => {
+                    const iframeDoc = this.testIframe.contentDocument;
+                    if (iframeDoc) {
+                        this.attachListenersToIframe(iframeDoc);
+                    }
+                });
+            }
+
+            attachListenersToIframe(doc) {
+                // Click events
+                doc.addEventListener('click', (e) => {
+                    if (this.isRecording) {
+                        this.recordAction('click', e.target, e);
+                    }
+                });
+
+                // Input events
+                doc.addEventListener('input', (e) => {
+                    if (this.isRecording) {
+                        this.recordAction('input', e.target, e);
+                    }
+                });
+
+                // Form submit events
+                doc.addEventListener('submit', (e) => {
+                    if (this.isRecording) {
+                        e.preventDefault();
+                        this.recordAction('submit', e.target, e);
+                    }
+                });
+            }
+
+            startRecording() {
+                this.isRecording = true;
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = false;
+                
+                this.status.className = 'status recording';
+                this.status.innerHTML = '🔴 Gravando ações... Interaja com o iframe abaixo';
+                
+                document.body.classList.add('recording');
+            }
+
+            stopRecording() {
+                this.isRecording = false;
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+                
+                this.status.className = 'status stopped';
+                this.status.innerHTML = '⏹️ Gravação parada';
+                
+                document.body.classList.remove('recording');
+                this.updateOutput();
+            }
+
+            recordAction(type, element, event) {
+                const selector = this.generateSelector(element);
+                const action = {
+                    id: this.actions.length + 1,
+                    type: type,
+                    element: {
+                        tagName: element.tagName.toLowerCase(),
+                        id: element.id,
+                        className: element.className,
+                        selector: selector,
+                        text: element.textContent?.trim() || '',
+                        placeholder: element.placeholder || ''
+                    },
+                    value: element.value || '',
+                    timestamp: new Date().toISOString(),
+                    isVariable: false,
+                    variableName: ''
+                };
+
+                this.actions.push(action);
+                this.updateActionsList();
+                this.highlightElement(element);
+            }
+
+            generateSelector(element) {
+                // Prioridade: ID > classe específica > XPath
+                if (element.id) {
+                    return `#${element.id}`;
+                }
+                
+                if (element.className) {
+                    const classes = element.className.split(' ').filter(c => c.trim());
+                    if (classes.length > 0) {
+                        return `.${classes.join('.')}`;
+                    }
+                }
+
+                // XPath como fallback
+                const xpath = this.getXPath(element);
+                return `xpath:${xpath}`;
+            }
+
+            getXPath(element) {
+                if (element.id) return `//*[@id="${element.id}"]`;
+                if (element === document.body) return '/html/body';
+
+                let ix = 0;
+                const siblings = element.parentNode?.childNodes || [];
+                
+                for (let i = 0; i < siblings.length; i++) {
+                    const sibling = siblings[i];
+                    if (sibling === element) {
+                        return this.getXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                    }
+                    if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+                        ix++;
+                    }
+                }
+            }
+
+            highlightElement(element) {
+                element.classList.add('highlight');
+                setTimeout(() => {
+                    element.classList.remove('highlight');
+                }, 1000);
+            }
+
+            updateActionsList() {
+                if (this.actions.length === 0) {
+                    this.actionsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Nenhuma ação gravada ainda</div>';
+                    return;
+                }
+
+                this.actionsList.innerHTML = this.actions.map(action => `
+                    <div class="action-item">
+                        <div class="action-info">
+                            <div class="action-type">${action.type}</div>
+                            <div class="action-details">
+                                ${action.element.selector} 
+                                ${action.value ? `→ "${action.value}"` : ''}
+                                ${action.isVariable ? `[VAR: ${action.variableName}]` : ''}
+                            </div>
+                        </div>
+                        <button class="variable-btn" onclick="recorder.toggleVariable(${action.id})">
+                            ${action.isVariable ? 'Fixo' : 'Variável'}
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            toggleVariable(actionId) {
+                const action = this.actions.find(a => a.id === actionId);
+                if (action) {
+                    action.isVariable = !action.isVariable;
+                    if (action.isVariable && !action.variableName) {
+                        action.variableName = `var${this.variableCounter++}`;
+                    }
+                    this.updateActionsList();
+                    this.updateOutput();
+                }
+            }
+
+            clearActions() {
+                this.actions = [];
+                this.variableCounter = 1;
+                this.updateActionsList();
+                this.updateOutput();
+            }
+
+            switchTab(tab) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.getElementById(`${tab}Tab`).classList.add('active');
+                this.updateOutput();
+            }
+
+            updateOutput() {
+                const activeTab = document.querySelector('.tab.active').id.replace('Tab', '');
+                
+                switch (activeTab) {
+                    case 'json':
+                        this.outputArea.innerHTML = this.generateJson();
+                        break;
+                    case 'markdown':
+                        this.outputArea.innerHTML = this.generateMarkdown();
+                        break;
+                    case 'python':
+                        this.outputArea.innerHTML = this.generatePython();
+                        break;
+                }
+            }
+
+            generateJson() {
+                const sequence = {
+                    name: this.currentSequenceName,
+                    description: `Sequência gravada em ${new Date().toLocaleString('pt-BR')}`,
+                    variables: this.actions.filter(a => a.isVariable).map(a => ({
+                        name: a.variableName,
+                        description: `Valor para ${a.element.selector}`,
+                        defaultValue: a.value
+                    })),
+                    actions: this.actions.map(action => ({
+                        type: action.type,
+                        selector: action.element.selector,
+                        value: action.isVariable ? `{{${action.variableName}}}` : action.value,
+                        element_info: {
+                            tag: action.element.tagName,
+                            id: action.element.id,
+                            class: action.element.className,
+                            text: action.element.text,
+                            placeholder: action.element.placeholder
+                        }
+                    }))
+                };
+
+                return `<pre style="white-space: pre-wrap;">${JSON.stringify(sequence, null, 2)}</pre>`;
+            }
+
+            generateMarkdown() {
+                let md = `# ${this.currentSequenceName}\n\n`;
+                md += `**Gerado em:** ${new Date().toLocaleString('pt-BR')}\n\n`;
+                
+                if (this.actions.filter(a => a.isVariable).length > 0) {
+                    md += `## Variáveis\n\n`;
+                    this.actions.filter(a => a.isVariable).forEach(action => {
+                        md += `- **${action.variableName}**: ${action.element.selector} (padrão: "${action.value}")\n`;
+                    });
+                    md += `\n`;
+                }
+
+                md += `## Sequência de Ações\n\n`;
+                this.actions.forEach((action, index) => {
+                    md += `${index + 1}. **${action.type.toUpperCase()}** em \`${action.element.selector}\`\n`;
+                    if (action.value) {
+                        md += `   - Valor: ${action.isVariable ? `{{${action.variableName}}}` : `"${action.value}"`}\n`;
+                    }
+                    md += `\n`;
+                });
+
+                return `<pre style="white-space: pre-wrap; font-family: inherit;">${md}</pre>`;
+            }
+
+            generatePython() {
+                let py = `# ${this.currentSequenceName}\n`;
+                py += `# Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
+                py += `from selenium import webdriver\n`;
+                py += `from selenium.webdriver.common.by import By\n`;
+                py += `from selenium.webdriver.support.wait import WebDriverWait\n`;
+                py += `from selenium.webdriver.support import expected_conditions as EC\n\n`;
+                
+                py += `def executar_sequencia(driver, variaveis=None):\n`;
+                py += `    """Executa a sequência de ações gravada"""\n`;
+                py += `    wait = WebDriverWait(driver, 10)\n\n`;
+
+                this.actions.forEach((action, index) => {
+                    py += `    # Ação ${index + 1}: ${action.type}\n`;
+                    
+                    let selector = action.element.selector;
+                    let byType = 'By.ID';
+                    let selectorValue = selector;
+                    
+                    if (selector.startsWith('#')) {
+                        byType = 'By.ID';
+                        selectorValue = selector.substring(1);
+                    } else if (selector.startsWith('.')) {
+                        byType = 'By.CLASS_NAME';
+                        selectorValue = selector.substring(1);
+                    } else if (selector.startsWith('xpath:')) {
+                        byType = 'By.XPATH';
+                        selectorValue = selector.substring(6);
+                    }
+
+                    py += `    element = wait.until(EC.element_to_be_clickable((${byType}, "${selectorValue}")))\n`;
+                    
+                    if (action.type === 'click') {
+                        py += `    element.click()\n`;
+                    } else if (action.type === 'input') {
+                        let value = action.value;
+                        if (action.isVariable) {
+                            value = `variaveis.get('${action.variableName}', '${action.value}')`;
+                            py += `    element.clear()\n`;
+                            py += `    element.send_keys(${value})\n`;
+                        } else {
+                            py += `    element.clear()\n`;
+                            py += `    element.send_keys("${value}")\n`;
+                        }
+                    }
+                    py += `\n`;
+                });
+
+                py += `\n# Exemplo de uso:\n`;
+                py += `# driver = webdriver.Chrome()\n`;
+                py += `# variaveis = {\n`;
+                this.actions.filter(a => a.isVariable).forEach(action => {
+                    py += `#     '${action.variableName}': 'seu_valor_aqui',\n`;
+                });
+                py += `# }\n`;
+                py += `# executar_sequencia(driver, variaveis)\n`;
+
+                return `<pre style="white-space: pre-wrap;">${py}</pre>`;
+            }
+
+            exportJson() {
+                const sequence = {
+                    name: this.currentSequenceName,
+                    description: `Sequência gravada em ${new Date().toLocaleString('pt-BR')}`,
+                    variables: this.actions.filter(a => a.isVariable).map(a => ({
+                        name: a.variableName,
+                        description: `Valor para ${a.element.selector}`,
+                        defaultValue: a.value
+                    })),
+                    actions: this.actions.map(action => ({
+                        type: action.type,
+                        selector: action.element.selector,
+                        value: action.isVariable ? `{{${action.variableName}}}` : action.value,
+                        element_info: {
+                            tag: action.element.tagName,
+                            id: action.element.id,
+                            class: action.element.className,
+                            text: action.element.text,
+                            placeholder: action.element.placeholder
+                        }
+                    }))
+                };
+
+                this.downloadFile(JSON.stringify(sequence, null, 2), `${this.currentSequenceName}.json`, 'application/json');
+            }
+
+            exportMarkdown() {
+                let md = `# ${this.currentSequenceName}\n\n`;
+                md += `**Gerado em:** ${new Date().toLocaleString('pt-BR')}\n\n`;
+                
+                if (this.actions.filter(a => a.isVariable).length > 0) {
+                    md += `## Variáveis\n\n`;
+                    this.actions.filter(a => a.isVariable).forEach(action => {
+                        md += `- **${action.variableName}**: ${action.element.selector} (padrão: "${action.value}")\n`;
+                    });
+                    md += `\n`;
+                }
+
+                md += `## Sequência de Ações\n\n`;
+                this.actions.forEach((action, index) => {
+                    md += `${index + 1}. **${action.type.toUpperCase()}** em \`${action.element.selector}\`\n`;
+                    if (action.value) {
+                        md += `   - Valor: ${action.isVariable ? `{{${action.variableName}}}` : `"${action.value}"`}\n`;
+                    }
+                    md += `\n`;
+                });
+
+                this.downloadFile(md, `${this.currentSequenceName}.md`, 'text/markdown');
+            }
+
+            downloadFile(content, filename, contentType) {
+                const blob = new Blob([content], { type: contentType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            async playbackSequence() {
+                if (this.actions.length === 0) {
+                    alert('Nenhuma ação para executar!');
+                    return;
+                }
+
+                const iframeDoc = this.testIframe.contentDocument;
+                if (!iframeDoc) return;
+
+                for (const action of this.actions) {
+                    let element;
+                    
+                    // Encontrar elemento
+                    if (action.element.selector.startsWith('#')) {
+                        element = iframeDoc.getElementById(action.element.selector.substring(1));
+                    } else if (action.element.selector.startsWith('.')) {
+                        element = iframeDoc.querySelector(action.element.selector);
+                    } else if (action.element.selector.startsWith('xpath:')) {
+                        const xpath = action.element.selector.substring(6);
+                        element = iframeDoc.evaluate(xpath, iframeDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    }
+
+                    if (element) {
+                        this.highlightElement(element);
+                        
+                        if (action.type === 'click') {
+                            element.click();
+                        } else if (action.type === 'input') {
+                            element.focus();
+                            element.value = action.value;
+                            element.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        
+                        // Pequena pausa entre ações
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+
+                alert('Sequência executada com sucesso!');
+            }
+        }
+
+        // Inicializar o recorder
+        const recorder = new BotRecorder();
+    </script>
+</body>
+</html>

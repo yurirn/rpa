@@ -38,5 +38,21 @@
     "module_path": "modules.conclusao",
     "requires_excel": true,
     "has_gera_xml_tiss": false
+  },
+  {
+    "id": "macro_gastrica",
+    "name": "Macro Gástrica",
+    "description": "",
+    "module_path": "modules.macro_gastrica",
+    "requires_excel": true,
+    "has_gera_xml_tiss": false
+  },
+  {
+    "id": "macroscopia_fixacao",
+    "name": "Macroscopia e Fixação",
+    "description": "Automatiza o processo de definição de responsável/auxiliar da macroscopia e data/hora de fixação",
+    "module_path": "modules.macroscopia_fixacao",
+    "requires_excel": true,
+    "has_gera_xml_tiss": false
   }
 ]
