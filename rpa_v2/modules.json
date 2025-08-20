@@ -40,6 +40,14 @@
     "has_gera_xml_tiss": false
   },
   {
+    "id": "macroscopia",
+    "name": "Macroscopia",
+    "description": "",
+    "module_path": "modules.macroscopia",
+    "requires_excel": true,
+    "has_gera_xml_tiss": false
+  },
+  {
     "id": "macro_gastrica",
     "name": "Macro Gástrica",
     "description": "",

@@ -173,7 +173,7 @@ class MacroGastricaModule(BaseModule):
         campo_busca.send_keys(mascara)
         campo_busca.send_keys(Keys.ENTER)
         log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "SUCCESS")
-        time.sleep(0.2)
+        time.sleep(0.5)
 
     def abrir_modal_variaveis_e_preencher(self, driver, wait, campo_d, campo_e, campo_f, campo_g):
         """Abre o modal de variáveis e preenche os campos"""
@@ -274,84 +274,6 @@ class MacroGastricaModule(BaseModule):
         log_message("💾 Macroscopia salva", "SUCCESS")
         time.sleep(0.3)
 
-    def fechar_exame_final(self, driver, wait):
-        """Clica no botão de fechar exame"""
-        # Aguardar o botão estar presente e clicável
-        botao_fechar = wait.until(
-            EC.element_to_be_clickable((By.ID, "fecharExameBarraFerramenta"))
-        )
-        botao_fechar.click()
-        log_message("📁 Exame fechado", "SUCCESS")
-        time.sleep(0.5)  # Reduzido de 2 para 0.5
-
-    def salvar_conclusao(self, driver, wait):
-        """Clica no botão Salvar"""
-        try:
-            # Aguardar o botão estar presente e clicável
-            log_message("💾 Procurando botão Salvar...", "INFO")
-            botao_salvar = wait.until(EC.element_to_be_clickable((By.ID, "salvarConcl")))
-            log_message("💾 Botão Salvar encontrado e clicável", "INFO")
-            
-            # Verificar se o botão está visível
-            if not botao_salvar.is_displayed():
-                log_message("⚠️ Botão salvarConcl não está visível", "WARNING")
-                return
-            
-            # Rolar até o botão para garantir visibilidade
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_salvar)
-            time.sleep(1)
-            
-            # Clicar no botão
-            botao_salvar.click()
-            log_message("💾 Clicou em Salvar", "INFO")
-            time.sleep(1)
-            
-        except Exception as e:
-            log_message(f"Erro ao salvar: {e}", "ERROR")
-            # Tentar encontrar o botão de outra forma
-            try:
-                # Tentar por link com onclick específico
-                botoes_onclick = driver.find_elements(By.XPATH, "//a[contains(@onclick, 'ajaxChangeSave')]")
-                log_message(f"Encontrados {len(botoes_onclick)} botões com onclick ajaxChangeSave", "INFO")
-                
-                if botoes_onclick:
-                    botao_onclick = botoes_onclick[0]
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_onclick)
-                    time.sleep(1)
-                    botao_onclick.click()
-                    log_message("💾 Clicou em Salvar usando onclick", "INFO")
-                    return
-                
-                # Tentar por classe do botão
-                botoes_classe = driver.find_elements(By.XPATH, "//a[contains(@class, 'btn-primary') and contains(text(), 'Salvar')]")
-                log_message(f"Encontrados {len(botoes_classe)} botões com classe btn-primary e texto Salvar", "INFO")
-                
-                if botoes_classe:
-                    botao_classe = botoes_classe[0]
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_classe)
-                    time.sleep(1)
-                    botao_classe.click()
-                    log_message("💾 Clicou em Salvar usando classe", "INFO")
-                    return
-                
-                # Listar todos os links/botões para debug
-                links = driver.find_elements(By.TAG_NAME, "a")
-                log_message(f"Total de links encontrados na página: {len(links)}", "INFO")
-                for i, link in enumerate(links[:15]):  # Apenas os primeiros 15
-                    link_id = link.get_attribute("id")
-                    link_class = link.get_attribute("class")
-                    link_text = link.text.strip()
-                    link_onclick = link.get_attribute("onclick")
-                    if (link_id and "salvar" in link_id.lower()) or \
-                       (link_class and "salvar" in link_class.lower()) or \
-                       (link_text and "salvar" in link_text.lower()) or \
-                       (link_onclick and "save" in link_onclick.lower()):
-                        log_message(f"Link {i}: id='{link_id}', class='{link_class}', text='{link_text}', onclick='{link_onclick}'", "INFO")
-                        
-            except Exception as debug_e:
-                log_message(f"Erro no debug de botões: {debug_e}", "ERROR")
-            raise
-
     def definir_grupo_baseado_mascara(self, driver, wait, mascara):
         """Define o grupo baseado na máscara (Estômago ou Intestino)"""
         if not mascara:
@@ -394,29 +316,31 @@ class MacroGastricaModule(BaseModule):
             )
             
             # Aguardar o input ficar visível e editável
-            wait.until(EC.element_to_be_clickable(input_grupo))
+            #wait.until(EC.element_to_be_clickable(input_grupo))
             
             # Digitar o grupo
             input_grupo.clear()
             input_grupo.send_keys(grupo_selecionado)
-            log_message(f"✍️ Digitou '{grupo_selecionado}' no campo grupo", "SUCCESS")
             time.sleep(0.5)
-            
-            # Aguardar e clicar na opção do dropdown (li em vez de a)
-            try:
-                opcao_grupo = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, f"//li//a[@class='dropdown-item'][contains(text(), '{grupo_selecionado}')]"))
-                )
-                opcao_grupo.click()
-            except:
-                # Fallback: tentar clicar diretamente no li
-                opcao_grupo = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, f"//li[contains(text(), '{grupo_selecionado}')]"))
-                )
-                opcao_grupo.click()
-            
-            log_message(f"✅ Selecionou '{grupo_selecionado}' no grupo", "SUCCESS")
+            input_grupo.send_keys(Keys.TAB)
+            log_message(f"✍️ Digitou '{grupo_selecionado}' no campo grupo", "SUCCESS")
             time.sleep(0.3)
+            
+            # # Aguardar e clicar na opção do dropdown (li em vez de a)
+            # try:
+            #     opcao_grupo = wait.until(
+            #         EC.element_to_be_clickable((By.XPATH, f"//li//a[@class='dropdown-item'][contains(text(), '{grupo_selecionado}')]"))
+            #     )
+            #     opcao_grupo.click()
+            # except:
+            #     # Fallback: tentar clicar diretamente no li
+            #     opcao_grupo = wait.until(
+            #         EC.element_to_be_clickable((By.XPATH, f"//li[contains(text(), '{grupo_selecionado}')]"))
+            #     )
+            #     opcao_grupo.click()
+            #
+            # log_message(f"✅ Selecionou '{grupo_selecionado}' no grupo", "SUCCESS")
+            # time.sleep(0.3)
             
         except Exception as e:
             log_message(f"⚠️ Erro ao definir grupo: {e}", "WARNING")
@@ -465,41 +389,44 @@ class MacroGastricaModule(BaseModule):
     def definir_regiao_gastrica(self, driver, wait):
         """Define a região como 'GA: Gastrica'"""
         try:
-            # Procurar o campo de região (pode ter ID dinâmico)
-            input_regiao = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'regiao_')]"))
-            )
-            
             # Procurar a âncora correspondente à região
             try:
-                # Procurar âncora vazia na mesma linha ou próxima ao input de região
                 campo_regiao = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'regiao_')]/following-sibling::a[contains(@class, 'table-editable-ancora')]"))
+                    EC.element_to_be_clickable((By.XPATH,
+                                                "//input[contains(@name, 'regiao_')]/following-sibling::a[contains(@class, 'table-editable-ancora')]"))
                 )
             except:
-                # Fallback: procurar qualquer âncora vazia
-                campos_vazios = driver.find_elements(By.XPATH, "//a[contains(@class, 'table-editable-ancora') and contains(text(), 'Vazio')]")
-                if len(campos_vazios) >= 3:  # Terceiro campo vazio seria região
+                campos_vazios = driver.find_elements(By.XPATH,
+                                                     "//a[contains(@class, 'table-editable-ancora') and contains(text(), 'Vazio')]")
+                if len(campos_vazios) >= 3:
                     campo_regiao = campos_vazios[2]
                 else:
-                    campo_regiao = campos_vazios[-1]  # Último campo vazio disponível
-            
-            campo_regiao.click()
-            log_message("🔍 Clicou no campo de região", "INFO")
-            time.sleep(0.3)
-            
-            # Aguardar o input ficar visível
-            wait.until(EC.element_to_be_clickable(input_regiao))
-            
+                    campo_regiao = campos_vazios[-1]
+
+            # Clicar na âncora apenas se for visível e habilitada
+            if campo_regiao.is_displayed() and campo_regiao.is_enabled():
+                campo_regiao.click()
+                log_message("🔍 Clicou no campo de região", "INFO")
+                time.sleep(0.3)
+            else:
+                log_message("⚠️ Campo de região não está interativo, pulando clique", "WARNING")
+
+            # Esperar o input ficar clicável e visível
+            input_regiao = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'regiao_')]")))
+
+            # Usar JavaScript para garantir que o campo está visível e interativo
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_regiao)
+            driver.execute_script("arguments[0].focus();", input_regiao)
+
             # Definir o valor como "GA: Gastrica"
             input_regiao.clear()
             input_regiao.send_keys("GA: Gastrica")
             log_message("✍️ Definiu região como 'GA: Gastrica'", "SUCCESS")
             time.sleep(0.3)
-            
-            # Pressionar Enter ou Tab para confirmar o valor
+
+            # Pressionar Tab para confirmar o valor
             input_regiao.send_keys(Keys.TAB)
-            
+
         except Exception as e:
             log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
@@ -509,81 +436,36 @@ class MacroGastricaModule(BaseModule):
             if not campo_d or campo_d.strip() == "":
                 log_message("⚠️ Campo D está vazio, não definindo quantidade", "WARNING")
                 return
-            
-            # Procurar o campo de quantidade (pode ter ID dinâmico)
+
             input_quantidade = wait.until(
                 EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_')]"))
             )
-            
-            # Procurar a âncora correspondente à quantidade
-            try:
-                campo_quantidade = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'quantidade_')]/following-sibling::a[contains(@class, 'table-editable-ancora')]"))
-                )
-            except:
-                # Fallback: procurar âncora vazia (pode ser a 4ª ou outra posição)
-                campos_vazios = driver.find_elements(By.XPATH, "//a[contains(@class, 'table-editable-ancora') and contains(text(), 'Vazio')]")
-                if len(campos_vazios) >= 4:  # Quarto campo vazio seria quantidade
-                    campo_quantidade = campos_vazios[3]
-                else:
-                    campo_quantidade = campos_vazios[-1]  # Último campo vazio disponível
-            
-            campo_quantidade.click()
-            log_message("🔍 Clicou no campo de quantidade", "INFO")
-            time.sleep(0.3)
-            
-            # Aguardar o input ficar visível
-            wait.until(EC.element_to_be_clickable(input_quantidade))
-            
-            # Definir a quantidade
-            input_quantidade.clear()
-            input_quantidade.send_keys(campo_d.strip())
+
+            # Clicar na âncora e aguardar o input ficar clicável rapidamente
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_quantidade)
+            driver.execute_script("arguments[0].focus(); arguments[0].value = arguments[1];", input_quantidade, campo_d.strip())
             log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}'", "SUCCESS")
-            time.sleep(0.3)
-            
+
             # Pressionar Tab para confirmar
             input_quantidade.send_keys(Keys.TAB)
-            
+
         except Exception as e:
             log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
 
     def definir_quantidade_blocos(self, driver, wait):
         """Define a quantidade de blocos como '1'"""
         try:
-            # Procurar o campo de quantidade de blocos (pode ter ID dinâmico)
+            # Aguardar o input ficar clicável e focado rapidamente
             input_blocos = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]"))
-            )
-            
-            # Procurar a âncora correspondente à quantidade de blocos
-            try:
-                campo_blocos = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]/following-sibling::a[contains(@class, 'table-editable-ancora')]"))
-                )
-            except:
-                # Fallback: procurar âncora vazia (seria o último campo)
-                campos_vazios = driver.find_elements(By.XPATH, "//a[contains(@class, 'table-editable-ancora') and contains(text(), 'Vazio')]")
-                if len(campos_vazios) >= 5:  # Quinto campo vazio seria quantidade de blocos
-                    campo_blocos = campos_vazios[4]
-                else:
-                    campo_blocos = campos_vazios[-1]  # Último campo vazio disponível
-            
-            campo_blocos.click()
-            log_message("🔍 Clicou no campo de quantidade de blocos", "INFO")
-            time.sleep(0.3)
-            
-            # Aguardar o input ficar visível
-            wait.until(EC.element_to_be_clickable(input_blocos))
-            
-            # Definir quantidade de blocos como 1
-            input_blocos.clear()
-            input_blocos.send_keys("1")
+                EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]")))
+
+            # Usar JavaScript para focar e preencher imediatamente
+            driver.execute_script("arguments[0].focus(); arguments[0].value = '1';", input_blocos)
             log_message("✍️ Definiu quantidade de blocos como '1'", "SUCCESS")
-            time.sleep(0.3)
-            
+
             # Pressionar Tab para confirmar
             input_blocos.send_keys(Keys.TAB)
-            
+
         except Exception as e:
             log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
 
@@ -996,9 +878,6 @@ class MacroGastricaModule(BaseModule):
             
             # 10. Enviar para próxima etapa
             self.enviar_proxima_etapa(driver, wait)
-            
-            # 11. Assinar com Dr. George
-            self.assinar_com_george(driver, wait)
             
             log_message("🎉 Processo de macroscopia finalizado com sucesso!", "SUCCESS")
             return {'status': 'sucesso', 'detalhes': 'Macroscopia processada com sucesso'}
