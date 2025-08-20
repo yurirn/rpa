@@ -20,6 +20,8 @@ class PreparacaoLoteModule(BaseModule):
 
     def get_unique_exames(self, file_path: str, modo_busca: str) -> list:
         if modo_busca == "exame":
+            #Caso precise buscar por tab do excel, usar o sheet_name
+            #df = pd.read_excel(file_path, sheet_name=2)
             df = pd.read_excel(file_path)
             unique_exames = df['Exame'].dropna().unique().tolist()
         elif modo_busca == "guia":

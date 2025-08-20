@@ -141,6 +141,8 @@ class MacroscopiaModule(BaseModule):
             else:
                 log_message("❌ Botão Salvar não encontrado.", "ERROR")
                 raise Exception("Botão Salvar não encontrado")
+
+            time.sleep(SHORT_DELAY)
         except Exception as e:
             log_message(f"Erro ao salvar: {e}", "ERROR")
             raise
@@ -281,10 +283,11 @@ class MacroscopiaModule(BaseModule):
             wait = WebDriverWait(driver, DEFAULT_TIMEOUT)
             log_message("Iniciando automação de macroscopia...", "INFO")
             driver.get(url)
-            self.preencher_campo(self.aguardar_elemento(wait, By.ID, "username"), username)
-            self.preencher_campo(self.aguardar_elemento(wait, By.ID, "password"), password)
-            self.clicar_elemento(driver, driver.find_element(By.CSS_SELECTOR, "button[type='submit']"))
-            self.clicar_elemento(driver, self.aguardar_elemento_clicavel(wait, By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']"))
+            # Login
+            wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
+            wait.until(EC.presence_of_element_located((By.ID, "password"))).send_keys(password)
+            driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+            wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']"))).click()
             time.sleep(MEDIUM_DELAY)
             try:
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
