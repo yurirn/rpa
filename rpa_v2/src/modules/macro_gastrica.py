@@ -25,7 +25,8 @@ class MacroGastricaModule(BaseModule):
             sheet = workbook.active
             dados = []
             ultima_mascara = None
-            
+            data_fixacao = None
+
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
                 codigo = sheet[f'A{row}'].value
@@ -34,7 +35,11 @@ class MacroGastricaModule(BaseModule):
                 campo_e = sheet[f'E{row}'].value  # Campo 200 (medida 1)
                 campo_f = sheet[f'F{row}'].value  # Campo 209 (medida 2)
                 campo_g = sheet[f'G{row}'].value  # Campo 218 (medida 3)
-                
+                data_col = sheet[f'L{row}'].value  # Coluna L: data de fixação
+
+                if row == 2 and data_col:
+                    data_fixacao = str(data_col).strip()
+
                 if codigo is not None:
                     codigo = str(codigo).strip()
                     
@@ -44,14 +49,21 @@ class MacroGastricaModule(BaseModule):
                         ultima_mascara = mascara
                     else:
                         mascara = ultima_mascara
-                    
+
+                    # Regra: se campo_d for 'mult', usar 6
+                    if campo_d is not None and str(campo_d).strip().lower() == 'mult':
+                        campo_d_valor = '6'
+                    else:
+                        campo_d_valor = str(campo_d).strip() if campo_d is not None else ""
+
                     dados.append({
                         'codigo': codigo,
                         'mascara': mascara,
-                        'campo_d': str(campo_d).strip() if campo_d is not None else "",
+                        'campo_d': campo_d_valor,
                         'campo_e': str(campo_e).strip() if campo_e is not None else "",
                         'campo_f': str(campo_f).strip() if campo_f is not None else "",
-                        'campo_g': str(campo_g).strip() if campo_g is not None else ""
+                        'campo_g': str(campo_g).strip() if campo_g is not None else "",
+                        'data_fixacao': data_fixacao
                     })
             
             workbook.close()
@@ -104,22 +116,28 @@ class MacroGastricaModule(BaseModule):
         log_message("✅ Renata Silva Sevidanis selecionada como auxiliar", "SUCCESS")
         time.sleep(0.2)
 
-    def definir_data_fixacao(self, driver, wait):
-        """Define a data 15/08/2025 no campo de data de fixação"""
-        # Aguardar o campo de data estar presente
-        campo_data = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//input[@type='date' and @name='dataFixacao']"))
-        )
-        
-        # Usar JavaScript para definir a data corretamente
-        driver.execute_script("""
-            var campo = arguments[0];
-            campo.value = '2025-08-15';
-            campo.dispatchEvent(new Event('change', { bubbles: true }));
-        """, campo_data)
-        
-        log_message("📅 Data de fixação definida para: 15/08/2025", "SUCCESS")
-        time.sleep(0.1)
+    def definir_data_fixacao(self, driver, wait, data_fixacao=None):
+        """Define a data de fixação no campo de data de fixação"""
+        try:
+            if not data_fixacao:
+                data_fixacao = '21082025'  # fallback para data padrão se não vier da planilha
+            # Converter 21082025 para 2025-08-21
+            if len(data_fixacao) == 8 and data_fixacao.isdigit():
+                data_formatada = f"{data_fixacao[4:8]}-{data_fixacao[2:4]}-{data_fixacao[0:2]}"
+            else:
+                data_formatada = '2025-08-21'
+            campo_data = wait.until(
+                EC.presence_of_element_located((By.XPATH, "//input[@type='date' and @name='dataFixacao']"))
+            )
+            driver.execute_script("""
+                var campo = arguments[0];
+                campo.value = arguments[1];
+                campo.dispatchEvent(new Event('change', { bubbles: true }));
+            """, campo_data, data_formatada)
+            log_message(f"📅 Data de fixação definida para: {data_formatada}", "SUCCESS")
+            time.sleep(0.1)
+        except Exception as e:
+            log_message(f"⚠️ Erro ao definir data de fixação: {e}", "WARNING")
 
     def definir_hora_fixacao(self, driver, wait):
         """Define 18:00 no campo de hora de fixação"""
@@ -275,15 +293,14 @@ class MacroGastricaModule(BaseModule):
         time.sleep(0.3)
 
     def definir_grupo_baseado_mascara(self, driver, wait, mascara):
-        """Define o grupo baseado na máscara (Estômago ou Intestino)"""
+        """Define o grupo baseado na máscara (Estômago ou Intestino) - versão simplificada e confiável."""
         if not mascara:
             log_message("⚠️ Nenhuma máscara fornecida para definir grupo", "WARNING")
             return
-        
-        # Determinar o grupo baseado na máscara
-        mascaras_estomago = ['A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'ESOFF', 'GASTRICA', 'POLIPO']
-        mascaras_intestino = ['B/COLON', 'DUO', 'ICR', 'P/COLON']
-        
+
+        mascaras_estomago = ['A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'DUO ', 'ESOFF', 'GASTRICA', 'POLIPO', 'G/POLIPO', 'ULCERA']
+        mascaras_intestino = ['B/COLON', 'ICR', 'P/COLON']
+
         grupo_selecionado = None
         if mascara.upper() in mascaras_estomago:
             grupo_selecionado = "Estomago"
@@ -292,10 +309,9 @@ class MacroGastricaModule(BaseModule):
         else:
             log_message(f"⚠️ Máscara '{mascara}' não encontrada nas regras definidas", "WARNING")
             return
-        
+
         try:
-            # Procurar especificamente o campo de grupo na linha correta
-            # Primeiro tentar encontrar a âncora do grupo que está "Vazio"
+            # Tentar clicar na âncora de grupo (apenas a primeira encontrada com 'Vazio')
             try:
                 campo_grupo = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//td[contains(text(), 'Grupo')]/following-sibling::td//a[contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
@@ -305,43 +321,20 @@ class MacroGastricaModule(BaseModule):
                 campo_grupo = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//a[contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
                 )
-            
             campo_grupo.click()
             log_message(f"🔍 Clicou no campo de grupo", "INFO")
             time.sleep(0.3)
-            
+
             # Aguardar o campo de input aparecer
             input_grupo = wait.until(
                 EC.presence_of_element_located((By.ID, "idRegiao"))
             )
-            
-            # Aguardar o input ficar visível e editável
-            #wait.until(EC.element_to_be_clickable(input_grupo))
-            
-            # Digitar o grupo
             input_grupo.clear()
             input_grupo.send_keys(grupo_selecionado)
             time.sleep(0.5)
             input_grupo.send_keys(Keys.TAB)
             log_message(f"✍️ Digitou '{grupo_selecionado}' no campo grupo", "SUCCESS")
             time.sleep(0.3)
-            
-            # # Aguardar e clicar na opção do dropdown (li em vez de a)
-            # try:
-            #     opcao_grupo = wait.until(
-            #         EC.element_to_be_clickable((By.XPATH, f"//li//a[@class='dropdown-item'][contains(text(), '{grupo_selecionado}')]"))
-            #     )
-            #     opcao_grupo.click()
-            # except:
-            #     # Fallback: tentar clicar diretamente no li
-            #     opcao_grupo = wait.until(
-            #         EC.element_to_be_clickable((By.XPATH, f"//li[contains(text(), '{grupo_selecionado}')]"))
-            #     )
-            #     opcao_grupo.click()
-            #
-            # log_message(f"✅ Selecionou '{grupo_selecionado}' no grupo", "SUCCESS")
-            # time.sleep(0.3)
-            
         except Exception as e:
             log_message(f"⚠️ Erro ao definir grupo: {e}", "WARNING")
 
@@ -386,9 +379,52 @@ class MacroGastricaModule(BaseModule):
         except Exception as e:
             log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
 
-    def definir_regiao_gastrica(self, driver, wait):
-        """Define a região como 'GA: Gastrica'"""
+    def definir_regiao_gastrica(self, driver, wait, mascara=None):
+        """Define a região de acordo com a máscara, conforme regras fornecidas"""
         try:
+            if not mascara:
+                log_message("⚠️ Nenhuma máscara fornecida para definir região", "WARNING")
+                return
+
+            # Regras de máscara para região
+            mascara_regiao = {
+                'A/C': 'AC: Antro/Corpo',
+                'A/I': 'AI: Antro/Incisura',
+                'AIC': 'AIC: Antro/Incisura/Corpo',
+                'AIF': 'AIF: Antro/Incisura/Fundo',
+                'ANTRO': 'AN: Antro',
+                'COTO': 'COTO: Coto',
+                'DUO': 'DUO: Duodeno',
+                'ESOFF': 'ESÔF: Esôfago',
+                'GASTRICA': 'GA: Gastrica',
+                'G/POLIPO': 'POL/GASTRICA: Pólipo e Biópsia Gástrica',
+                'POLIPO': 'POLG: Pólipo Gástrico',
+                'ICR': 'ICR: Íleo/Cólon/Reto',
+            }
+            mascaras_sem_regiao = ['B/COLON', 'P/COLON', 'ULCERA']
+
+            mascara_upper = mascara.upper().replace('Ó', 'O').replace('Ô', 'O')
+            mascara_map = {k.upper().replace('Ó', 'O').replace('Ô', 'O'): v for k, v in mascara_regiao.items()}
+            mascaras_sem_regiao_norm = [m.upper().replace('Ó', 'O').replace('Ô', 'O') for m in mascaras_sem_regiao]
+
+            if mascara_upper in mascaras_sem_regiao_norm:
+                log_message(f"⚠️ Máscara '{mascara}' não exige preenchimento de região (manual)", "WARNING")
+                # Forçar foco no campo de quantidade de fragmentos para evitar erro de interatividade
+                try:
+                    input_quantidade = wait.until(
+                        EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_')]"))
+                    )
+                    driver.execute_script("arguments[0].focus();", input_quantidade)
+                    log_message("🔍 Foco forçado no campo de quantidade de fragmentos (manual)", "INFO")
+                except Exception as e:
+                    log_message(f"⚠️ Não foi possível forçar foco no campo de quantidade: {e}", "WARNING")
+                return
+
+            regiao_valor = mascara_map.get(mascara_upper)
+            if not regiao_valor:
+                log_message(f"⚠️ Máscara '{mascara}' não encontrada nas regras de região", "WARNING")
+                return
+
             # Procurar a âncora correspondente à região
             try:
                 campo_regiao = wait.until(
@@ -410,6 +446,7 @@ class MacroGastricaModule(BaseModule):
                 time.sleep(0.3)
             else:
                 log_message("⚠️ Campo de região não está interativo, pulando clique", "WARNING")
+                return
 
             # Esperar o input ficar clicável e visível
             input_regiao = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'regiao_')]")))
@@ -418,10 +455,10 @@ class MacroGastricaModule(BaseModule):
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_regiao)
             driver.execute_script("arguments[0].focus();", input_regiao)
 
-            # Definir o valor como "GA: Gastrica"
+            # Definir o valor conforme a regra
             input_regiao.clear()
-            input_regiao.send_keys("GA: Gastrica")
-            log_message("✍️ Definiu região como 'GA: Gastrica'", "SUCCESS")
+            input_regiao.send_keys(regiao_valor)
+            log_message(f"✍️ Definiu região como '{regiao_valor}'", "SUCCESS")
             time.sleep(0.3)
 
             # Pressionar Tab para confirmar o valor
@@ -431,7 +468,7 @@ class MacroGastricaModule(BaseModule):
             log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
     def definir_quantidade_fragmentos(self, driver, wait, campo_d):
-        """Define a quantidade de fragmentos baseado no campo D da planilha"""
+        """Define a quantidade de fragmentos baseado no campo D da planilha, sempre via JavaScript, sem scrollIntoView."""
         try:
             if not campo_d or campo_d.strip() == "":
                 log_message("⚠️ Campo D está vazio, não definindo quantidade", "WARNING")
@@ -441,10 +478,9 @@ class MacroGastricaModule(BaseModule):
                 EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_')]"))
             )
 
-            # Clicar na âncora e aguardar o input ficar clicável rapidamente
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_quantidade)
-            driver.execute_script("arguments[0].focus(); arguments[0].value = arguments[1];", input_quantidade, campo_d.strip())
-            log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}'", "SUCCESS")
+            # Preencher o campo diretamente via JavaScript, sem scroll nem focus
+            driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", input_quantidade, campo_d.strip())
+            log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}' via JS", "SUCCESS")
 
             # Pressionar Tab para confirmar
             input_quantidade.send_keys(Keys.TAB)
@@ -453,15 +489,14 @@ class MacroGastricaModule(BaseModule):
             log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
 
     def definir_quantidade_blocos(self, driver, wait):
-        """Define a quantidade de blocos como '1'"""
+        """Define a quantidade de blocos como '1', sempre via JavaScript, sem scrollIntoView."""
         try:
-            # Aguardar o input ficar clicável e focado rapidamente
             input_blocos = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]")))
+                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]")))
 
-            # Usar JavaScript para focar e preencher imediatamente
-            driver.execute_script("arguments[0].focus(); arguments[0].value = '1';", input_blocos)
-            log_message("✍️ Definiu quantidade de blocos como '1'", "SUCCESS")
+            # Preencher o campo diretamente via JavaScript, sem scroll nem focus
+            driver.execute_script("arguments[0].value = '1'; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", input_blocos)
+            log_message("✍️ Definiu quantidade de blocos como '1' via JS", "SUCCESS")
 
             # Pressionar Tab para confirmar
             input_blocos.send_keys(Keys.TAB)
@@ -537,8 +572,8 @@ class MacroGastricaModule(BaseModule):
             self.definir_representacao_secao(driver, wait)
             
             # 3. Definir região como "GA: Gastrica"
-            self.definir_regiao_gastrica(driver, wait)
-            
+            self.definir_regiao_gastrica(driver, wait, mascara)
+
             # 4. Definir quantidade de fragmentos (campo D)
             self.definir_quantidade_fragmentos(driver, wait, campo_d)
             
@@ -783,13 +818,24 @@ class MacroGastricaModule(BaseModule):
                 # Fallback para ID se placeholder não funcionar
                 campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
                 log_message("✅ Campo de código encontrado pelo ID", "INFO")
-            
-            # Interagir com o campo usando os métodos já implementados
-            self.interagir_com_campo_codigo(driver, campo_codigo, codigo)
-            
+
+            # Preencher o campo de código e clicar no botão de pesquisar
+            campo_codigo.clear()
+            campo_codigo.send_keys(codigo)
+            log_message(f"✍️ Código '{codigo}' digitado no campo", "SUCCESS")
+
+            # Clicar no botão de pesquisar (consultarExameBarraAbrirPorBarCode)
+            try:
+                botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "consultarExameBarraAbrirPorBarCode")))
+                botao_pesquisar.click()
+                log_message("🔍 Clicou no botão de pesquisar exame", "SUCCESS")
+            except Exception as e:
+                log_message(f"⚠️ Não foi possível clicar no botão de pesquisar: {e}", "WARNING")
+                raise
+
             # Aguardar div de andamento aparecer
             return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g)
-                
+
         except Exception as e:
             error_message = str(e)
             log_message(f"Erro ao processar exame {codigo}: {error_message}", "ERROR")
@@ -807,22 +853,6 @@ class MacroGastricaModule(BaseModule):
             except:
                 pass
             return {'status': 'erro', 'detalhes': error_message}
-
-    def interagir_com_campo_codigo(self, driver, campo_codigo, codigo):
-        """Interage com o campo de código usando os métodos já implementados"""
-        # Usar JavaScript direto para ser mais rápido e confiável
-        driver.execute_script(f"""
-            var campo = arguments[0];
-            campo.value = '{codigo}';
-            campo.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            campo.dispatchEvent(new KeyboardEvent('keydown', {{
-                key: 'Enter',
-                code: 'Enter',
-                keyCode: 13,
-                bubbles: true
-            }}));
-        """, campo_codigo)
-        log_message(f"✍️ Código '{codigo}' digitado e pesquisado", "SUCCESS")
 
     def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g):
         """Aguarda a div de andamento e processa o exame"""
@@ -850,7 +880,7 @@ class MacroGastricaModule(BaseModule):
             
             # 3. Definir data de hoje
             self.definir_data_fixacao(driver, wait)
-            
+
             # 4. Definir hora 18:00
             self.definir_hora_fixacao(driver, wait)
             
