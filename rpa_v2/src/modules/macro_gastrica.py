@@ -26,11 +26,13 @@ class MacroGastricaModule(BaseModule):
             dados = []
             ultima_mascara = None
             data_fixacao = None
+            responsavel_macro_valor = None
 
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
                 codigo = sheet[f'A{row}'].value
                 mascara = sheet[f'B{row}'].value
+                responsavel_macro = sheet[f'C{row}'].value
                 campo_d = sheet[f'D{row}'].value  # Campo 182 (número de fragmentos)
                 campo_e = sheet[f'E{row}'].value  # Campo 200 (medida 1)
                 campo_f = sheet[f'F{row}'].value  # Campo 209 (medida 2)
@@ -40,9 +42,11 @@ class MacroGastricaModule(BaseModule):
                 if row == 2 and data_col:
                     data_fixacao = str(data_col).strip()
 
+                if row == 2 and responsavel_macro:
+                    responsavel_macro_valor = str(responsavel_macro).strip().upper()
+
                 if codigo is not None:
                     codigo = str(codigo).strip()
-                    
                     # Se não tem máscara, usa a última válida
                     if mascara is not None and str(mascara).strip():
                         mascara = str(mascara).strip()
@@ -59,13 +63,13 @@ class MacroGastricaModule(BaseModule):
                     dados.append({
                         'codigo': codigo,
                         'mascara': mascara,
+                        'responsavel_macro': responsavel_macro_valor,
                         'campo_d': campo_d_valor,
                         'campo_e': str(campo_e).strip() if campo_e is not None else "",
                         'campo_f': str(campo_f).strip() if campo_f is not None else "",
                         'campo_g': str(campo_g).strip() if campo_g is not None else "",
                         'data_fixacao': data_fixacao
                     })
-            
             workbook.close()
             return dados
         except Exception as e:
@@ -82,21 +86,29 @@ class MacroGastricaModule(BaseModule):
                 return False
             return True
 
-    def selecionar_responsavel_macroscopia(self, driver, wait):
-        """Seleciona 'Nathalia Fernanda da Silva Lopes' como responsável pela macroscopia"""
-        # Aguardar o componente Select2 estar presente e clicar
+    def selecionar_responsavel_macroscopia(self, driver, wait, responsavel_macro):
+        """Seleciona o responsável pela macroscopia conforme o nome recebido (nome curto)"""
+        # Mapper de nomes: primeiro nome em caixa alta -> nome completo
+        responsavel_macro_mapper = {
+            'BARBARA': 'Barbara Dutra Lopes',
+            'NATHALIA': 'Nathalia Fernanda da Silva Lopes',
+            'RENATA': 'Renata Silva Sevidanis',
+            'HELEN': 'Helen Oliveira dos Santos',
+            'CLARA': 'Clara Helena Janz Garcia de Souza'
+            # Adicione outros nomes conforme necessário
+        }
+        nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(
             EC.element_to_be_clickable((By.XPATH, "//span[@aria-labelledby='select2-responsavelMacroscopiaId-container']"))
         )
         select2_container.click()
-        time.sleep(0.2)
-        
-        # Aguardar e clicar na opção "Nathalia Fernanda da Silva Lopes"
-        opcao_nathalia = wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//li[contains(text(), 'Nathalia Fernanda da Silva Lopes')]"))
+        time.sleep(0.3)
+        # Seleciona a opção pelo nome completo
+        opcao = wait.until(
+            EC.element_to_be_clickable((By.XPATH, f"//li[contains(text(), '{nome_completo}')]") )
         )
-        opcao_nathalia.click()
-        log_message("✅ Nathalia Fernanda da Silva Lopes selecionada como responsável", "SUCCESS")
+        opcao.click()
+        log_message(f"✅ {nome_completo} selecionado como responsável", "SUCCESS")
         time.sleep(0.2)
 
     def selecionar_auxiliar_macroscopia(self, driver, wait):
@@ -231,8 +243,11 @@ class MacroGastricaModule(BaseModule):
             log_message(f"🔍 Encontrados {len(campos_input)} campos de input no modal", "INFO")
             
             # Mapear valores para os campos na ordem que aparecem
-            valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
-            
+            if str(campo_d).strip() == "6":
+                valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+            else:
+                valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
+
             for i, campo in enumerate(campos_input[:5]):  # Limitar aos 5 primeiros campos
                 if i < len(valores) and valores[i]:
                     try:
@@ -314,7 +329,8 @@ class MacroGastricaModule(BaseModule):
             # Tentar clicar na âncora de grupo (apenas a primeira encontrada com 'Vazio')
             try:
                 campo_grupo = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//td[contains(text(), 'Grupo')]/following-sibling::td//a[contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
+                    EC.element_to_be_clickable((By.XPATH,
+                                                "//div[@id='fragmentosContainer']//a[contains(@class, 'table-editable-ancora') and contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
                 )
             except:
                 # Fallback: procurar qualquer âncora de autocomplete vazia
@@ -344,38 +360,42 @@ class MacroGastricaModule(BaseModule):
             # Procurar especificamente o campo de representação na linha correta
             try:
                 campo_representacao = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//td[contains(text(), 'Representação')]/following-sibling::td//a[contains(@class, 'table-editable-ancora')]"))
+                    EC.element_to_be_clickable((By.XPATH,
+                                                "//div[@id='fragmentosContainer']//a[contains(@class, 'table-editable-ancora') and contains(text(), 'representação')]"))
                 )
             except:
                 # Fallback: procurar qualquer âncora de representação
                 campo_representacao = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//a[contains(@class, 'table-editable-ancora')]"))
                 )
-            
+
             # Verificar se já está definida como "Seção"
             if "Seção" in campo_representacao.text:
                 log_message("✅ Representação já está definida como 'Seção'", "SUCCESS")
                 return
-            
+
             # Se não estiver, clicar para alterar
             campo_representacao.click()
             log_message("🔍 Clicou no campo de representação", "INFO")
             time.sleep(0.3)
-            
+
             # Aguardar o select aparecer
             select_representacao = wait.until(
                 EC.presence_of_element_located((By.ID, "representacao"))
             )
-            
+
             # Aguardar o select ficar visível
             wait.until(EC.element_to_be_clickable(select_representacao))
-            
+
             # Selecionar "Seção" (valor "S")
             select = Select(select_representacao)
             select.select_by_value("S")
+
+            campo_representacao.send_keys(Keys.ENTER)
+
             log_message("✅ Representação definida como 'Seção'", "SUCCESS")
             time.sleep(0.3)
-            
+
         except Exception as e:
             log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
 
@@ -394,14 +414,13 @@ class MacroGastricaModule(BaseModule):
                 'AIF': 'AIF: Antro/Incisura/Fundo',
                 'ANTRO': 'AN: Antro',
                 'COTO': 'COTO: Coto',
-                'DUO': 'DUO: Duodeno',
                 'ESOFF': 'ESÔF: Esôfago',
                 'GASTRICA': 'GA: Gastrica',
                 'G/POLIPO': 'POL/GASTRICA: Pólipo e Biópsia Gástrica',
                 'POLIPO': 'POLG: Pólipo Gástrico',
                 'ICR': 'ICR: Íleo/Cólon/Reto',
             }
-            mascaras_sem_regiao = ['B/COLON', 'P/COLON', 'ULCERA']
+            mascaras_sem_regiao = ['B/COLON', 'P/COLON', 'ULCERA', 'DUO']
 
             mascara_upper = mascara.upper().replace('Ó', 'O').replace('Ô', 'O')
             mascara_map = {k.upper().replace('Ó', 'O').replace('Ô', 'O'): v for k, v in mascara_regiao.items()}
@@ -710,7 +729,9 @@ class MacroGastricaModule(BaseModule):
                 campo_e = exame_data['campo_e']
                 campo_f = exame_data['campo_f']
                 campo_g = exame_data['campo_g']
-                
+                responsavel_macro = exame_data['responsavel_macro']
+                data_fixacao = exame_data['data_fixacao']
+
                 log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara})", "INFO")
                 
                 try:
@@ -764,7 +785,7 @@ class MacroGastricaModule(BaseModule):
                         log_message("✅ Browser recriado e login realizado novamente", "SUCCESS")
                     
                     # Processar este exame específico
-                    resultado = self.processar_exame(driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g)
+                    resultado = self.processar_exame(driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
@@ -803,7 +824,7 @@ class MacroGastricaModule(BaseModule):
                 except Exception as quit_error:
                     log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
 
-    def processar_exame(self, driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g):
+    def processar_exame(self, driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         """Processa um exame individual"""
         try:
             # Verificar se a sessão do browser ainda está ativa
@@ -819,7 +840,6 @@ class MacroGastricaModule(BaseModule):
                 campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
                 log_message("✅ Campo de código encontrado pelo ID", "INFO")
 
-            # Preencher o campo de código e clicar no botão de pesquisar
             campo_codigo.clear()
             campo_codigo.send_keys(codigo)
             log_message(f"✍️ Código '{codigo}' digitado no campo", "SUCCESS")
@@ -834,7 +854,7 @@ class MacroGastricaModule(BaseModule):
                 raise
 
             # Aguardar div de andamento aparecer
-            return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g)
+            return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
 
         except Exception as e:
             error_message = str(e)
@@ -854,7 +874,7 @@ class MacroGastricaModule(BaseModule):
                 pass
             return {'status': 'erro', 'detalhes': error_message}
 
-    def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g):
+    def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         """Aguarda a div de andamento e processa o exame"""
         # Aguardar div de andamento aparecer (otimizado)
         try:
@@ -867,19 +887,18 @@ class MacroGastricaModule(BaseModule):
         
         # Processar conclusão diretamente sem verificar SVG
         log_message("✅ Exame carregado - iniciando processo de conclusão", "SUCCESS")
-        return self.processar_conclusao_completa(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g)
+        return self.processar_conclusao_completa(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
 
-    def processar_conclusao_completa(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g):
-        """Processa a conclusão completa do exame"""
+    def processar_conclusao_completa(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         try:
-            # 1. Selecionar Nathalia como Macroscopista Responsável
-            self.selecionar_responsavel_macroscopia(driver, wait)
-            
+            # 1. Selecionar responsável pela macroscopia
+            self.selecionar_responsavel_macroscopia(driver, wait, responsavel_macro)
+
             # 2. Selecionar Renata como Auxiliar da Macroscopia
             self.selecionar_auxiliar_macroscopia(driver, wait)
             
-            # 3. Definir data de hoje
-            self.definir_data_fixacao(driver, wait)
+            # 3. Definir data de fixação correta
+            self.definir_data_fixacao(driver, wait, data_fixacao)
 
             # 4. Definir hora 18:00
             self.definir_hora_fixacao(driver, wait)
