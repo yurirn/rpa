@@ -1,0 +1,105 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('config.json', '.'),
+        ('modules.json', '.'),
+        ('src/', 'src/'),
+        ('xml/', 'xml/'),
+    ],
+    hiddenimports=[
+        # Selenium completo
+        'selenium',
+        'selenium.webdriver',
+        'selenium.webdriver.common',
+        'selenium.webdriver.common.by',
+        'selenium.webdriver.common.keys',
+        'selenium.webdriver.common.action_chains',
+        'selenium.webdriver.common.desired_capabilities',
+        'selenium.webdriver.common.proxy',
+        'selenium.webdriver.common.service',
+        'selenium.webdriver.common.utils',
+        'selenium.webdriver.chrome',
+        'selenium.webdriver.chrome.service',
+        'selenium.webdriver.chrome.options',
+        'selenium.webdriver.firefox',
+        'selenium.webdriver.firefox.service',
+        'selenium.webdriver.firefox.options',
+        'selenium.webdriver.edge',
+        'selenium.webdriver.edge.service',
+        'selenium.webdriver.edge.options',
+        'selenium.webdriver.support',
+        'selenium.webdriver.support.ui',
+        'selenium.webdriver.support.expected_conditions',
+        'selenium.webdriver.support.select',
+        'selenium.webdriver.support.wait',
+        
+        # WebDriver Manager
+        'webdriver_manager',
+        'webdriver_manager.chrome',
+        'webdriver_manager.firefox',
+        'webdriver_manager.edge',
+        'webdriver_manager.core',
+        'webdriver_manager.core.driver',
+        'webdriver_manager.core.manager',
+        'webdriver_manager.core.os_manager',
+        'webdriver_manager.core.utils',
+        
+        # Outras dependências
+        'requests',
+        'pandas',
+        'openpyxl',
+        'tkinter',
+        'tkinter.ttk',
+        'tkinter.messagebox',
+        'tkinter.filedialog',
+        'json',
+        'threading',
+        'datetime',
+        'os',
+        'sys',
+        'time',
+        're',
+        'csv',
+        'xml',
+        'xml.etree',
+        'xml.etree.ElementTree',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='Sistema_RPA',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,  # False para aplicação GUI sem console
+    disable_windowed_traceback=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,  # Adicione um ícone aqui se desejar
+)
