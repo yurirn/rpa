@@ -198,8 +198,13 @@ class PreparacaoLoteModule(BaseModule):
                     # Clicar no botão de situação de faturamento
                     try:
                         botao_situacao = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']")))
-                        #botao_situacao.click()
+                        botao_situacao.click()
                         log_message("Botão de situação de faturamento clicado.", "INFO")
+
+                        modal_carregando = driver.find_element(By.XPATH, "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
+                        if modal_carregando.is_displayed():
+                            time.sleep(1)
+
                     except Exception as e:
                         log_message(f"Não foi possível clicar no botão de situação de faturamento: {e}", "ERROR")
                 except Exception as e:
