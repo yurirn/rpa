@@ -42,7 +42,7 @@ class MacroGastricaModule(BaseModule):
                 if row == 2 and data_col:
                     data_fixacao = str(data_col).strip()
 
-                if row == 2 and responsavel_macro:
+                if responsavel_macro is not None and str(responsavel_macro).strip():
                     responsavel_macro_valor = str(responsavel_macro).strip().upper()
 
                 if codigo is not None:
@@ -94,8 +94,9 @@ class MacroGastricaModule(BaseModule):
             'NATHALIA': 'Nathalia Fernanda da Silva Lopes',
             'RENATA': 'Renata Silva Sevidanis',
             'HELEN': 'Helen Oliveira dos Santos',
-            'CLARA': 'Clara Helena Janz Garcia de Souza'
-            # Adicione outros nomes conforme necessário
+            'CLARA': 'Clara Helena Janz Garcia de Souza',
+            'PALOMA': 'Paloma Brenda Silva De Oliveira',
+            'ELLEN': 'Ellen Andressa de Alvarenga'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(
