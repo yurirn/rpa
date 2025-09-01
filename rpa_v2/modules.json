@@ -6,7 +6,8 @@
     "module_path": "modules.criacao_exames",
     "requires_excel": false,
     "tipo_busca": false,
-    "has_gera_xml_tiss": false
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   },
   {
     "id": "preparacao_lote",
@@ -15,7 +16,8 @@
     "module_path": "modules.preparacao_lote",
     "requires_excel": true,
     "tipo_busca": true,
-    "has_gera_xml_tiss": true
+    "has_gera_xml_tiss": true,
+    "requires_unimed_credentials": false
   },
   {
     "id": "envio_lote_unimed",
@@ -24,7 +26,8 @@
     "module_path": "modules.envio_lote_unimed",
     "requires_excel": false,
     "tipo_busca": false,
-    "has_gera_xml_tiss": false
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": true
   },
   {
     "id": "conclusao",
@@ -33,7 +36,8 @@
     "module_path": "modules.conclusao",
     "requires_excel": true,
     "tipo_busca": false,
-    "has_gera_xml_tiss": false
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   },
   {
     "id": "macroscopia",
@@ -42,7 +46,8 @@
     "module_path": "modules.macroscopia",
     "requires_excel": true,
     "tipo_busca": false,
-    "has_gera_xml_tiss": false
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   },
   {
     "id": "macro_gastrica",
@@ -51,6 +56,7 @@
     "module_path": "modules.macro_gastrica",
     "requires_excel": true,
     "tipo_busca": false,
-    "has_gera_xml_tiss": false
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   }
 ]

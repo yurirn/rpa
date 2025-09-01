@@ -336,8 +336,13 @@ def run(params):
     """
     username = params.get("username")
     password = params.get("password")
-    unimed_user = params.get("unimed_user", "408.832.948-18")
-    unimed_pass = params.get("unimed_pass", "*Dap2025*")
+    unimed_user = params.get("unimed_user")
+    unimed_pass = params.get("unimed_pass")
+
+    if not unimed_user or not unimed_pass:
+        log_message("Credenciais da Unimed não fornecidas!", "ERROR")
+        return False
+
     pasta_download = params.get("pasta_download", os.path.join(os.getcwd(), "xml"))
     cancel_flag = params.get("cancel_flag")
     headless_mode = params.get("headless_mode", False)
