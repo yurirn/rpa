@@ -33,6 +33,10 @@ class MainWindow:
         self.gera_xml_tiss = tk.StringVar(value="sim")
         self.headless_mode = tk.BooleanVar(value=False)
 
+        self.unimed_user = tk.StringVar()
+        self.unimed_password = tk.StringVar()
+        self.show_unimed_password = tk.BooleanVar(value=False)
+
         self.modules = self.load_modules()
         self.module_id_map = {m['id']: m for m in self.modules}
         self.module_name_map = {m['name']: m for m in self.modules}
@@ -147,6 +151,7 @@ class MainWindow:
         requires_excel = module.get("requires_excel") if module else False
         tipo_busca = module.get("tipo_busca") if module else False
         has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
+        requires_unimed_credentials = module.get("requires_unimed_credentials") if module else False
 
         row = 0
         if requires_excel:
@@ -166,6 +171,27 @@ class MainWindow:
             self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"),
                                             foreground="blue")
             self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
+            row += 1
+
+        if requires_unimed_credentials:
+
+            ttk.Label(self.params_frame, text="Credenciais Unimed:", font=('Arial', 10, 'bold')).grid(row=row, column=0,columnspan=3,sticky="w")
+            row += 1
+
+            ttk.Label(self.params_frame, text="Usuário Unimed:").grid(row=row, column=0, sticky="w", pady=(5, 0))
+            unimed_user_entry = ttk.Entry(self.params_frame, textvariable=self.unimed_user, width=30)
+            unimed_user_entry.grid(row=row, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+            row += 1
+
+            ttk.Label(self.params_frame, text="Senha Unimed:").grid(row=row, column=0, sticky="w", pady=(5, 0))
+            unimed_pass_frame = ttk.Frame(self.params_frame)
+            unimed_pass_frame.grid(row=row, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+
+            self.unimed_password_entry = ttk.Entry(unimed_pass_frame, textvariable=self.unimed_password, show="*",
+                                                   width=25)
+            self.unimed_password_entry.pack(side=tk.LEFT)
+
+            ttk.Checkbutton(unimed_pass_frame, text="Mostrar", variable=self.show_unimed_password, command=self.toggle_unimed_password_visibility).pack(side=tk.LEFT, padx=(10, 0))
             row += 1
 
         if has_gera_xml_tiss:
@@ -227,22 +253,8 @@ class MainWindow:
     def toggle_password_visibility(self):
         self.password_entry.config(show="" if self.show_password.get() else "*")
 
-    def test_connection(self):
-        username = self.username.get().strip()
-        password = self.password.get().strip()
-        if not username or not password:
-            messagebox.showwarning("Aviso", "Por favor, preencha usuário e senha!")
-            self.log("Credenciais incompletas", "WARNING")
-            return
-
-        self.log(f"Testando conexão com usuário: {username}", "INFO")
-        self.test_login_button.config(state="disabled", text="Testando...")
-        self.root.after(1000, self._finish_connection_test)
-
-    def _finish_connection_test(self):
-        self.test_login_button.config(state="normal", text="Testar Conexão")
-        self.log("✅ Credenciais salvas (teste será implementado com Selenium)", "SUCCESS")
-        messagebox.showinfo("Sucesso", "Credenciais salvas com sucesso!")
+    def toggle_unimed_password_visibility(self):
+        self.unimed_password_entry.config(show="" if self.show_unimed_password.get() else "*")
 
     def validate_credentials(self):
         username = self.username.get().strip()
@@ -296,6 +308,16 @@ class MainWindow:
             })
         if module.get("has_gera_xml_tiss"):
             params["gera_xml_tiss"] = self.gera_xml_tiss.get()
+        if module.get("requires_unimed_credentials"):
+            unimed_user = self.unimed_user.get().strip()
+            unimed_pass = self.unimed_password.get().strip()
+            if not unimed_user or not unimed_pass:
+                messagebox.showwarning("Credenciais Unimed", "Preencha usuário e senha da Unimed!")
+                return
+            params.update({
+                "unimed_user": unimed_user,
+                "unimed_pass": unimed_pass
+            })
         def run_in_thread():
             try:
                 mod = importlib.import_module(module["module_path"])
