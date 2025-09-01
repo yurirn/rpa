@@ -7,6 +7,7 @@ import importlib
 import json
 import os
 import threading
+import base64
 
 CONFIG_FILE = 'config.json'
 MODULES_FILE = 'modules.json'
@@ -26,6 +27,7 @@ class MainWindow:
         self.username = tk.StringVar()
         self.password = tk.StringVar()
         self.show_password = tk.BooleanVar(value=False)
+        self.save_credentials = tk.BooleanVar(value=False)
         self.excel_file_path = tk.StringVar()
         self.tipo_busca = tk.StringVar(value="numero_exame")
         self.gera_xml_tiss = tk.StringVar(value="sim")
@@ -34,7 +36,7 @@ class MainWindow:
         self.modules = self.load_modules()
         self.module_id_map = {m['id']: m for m in self.modules}
         self.module_name_map = {m['name']: m for m in self.modules}
-        self.load_last_username()
+        self.load_last_credentials()
         self.setup_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.log("Sistema iniciado", "SUCCESS")
@@ -104,6 +106,14 @@ class MainWindow:
             variable=self.headless_mode
         )
         self.headless_check.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        self.save_credentials_check = ttk.Checkbutton(
+            frame,
+            text="Salvar credenciais neste computador",
+            variable=self.save_credentials,
+            command=self.on_save_credentials_changed
+        )
+        self.save_credentials_check.grid(row=4, column=0, columnspan=2, sticky="w", pady=(5, 0))
 
     def create_module_section(self, parent):
         frame = ttk.LabelFrame(parent, text="Módulo de Automação", padding="10")
@@ -209,6 +219,8 @@ class MainWindow:
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Arquivo", menu=file_menu)
         file_menu.add_command(label="Limpar Logs", command=self.clear_logs)
+        file_menu.add_separator()
+        file_menu.add_command(label="Limpar Credenciais Salvas", command=self.clear_saved_credentials)
         file_menu.add_separator()
         file_menu.add_command(label="Sair", command=self.root.quit)
 
@@ -325,13 +337,54 @@ class MainWindow:
             'password': self.password.get().strip()
         }
 
+    def _encode_password(self, password):
+        """Codifica a senha usando base64 para armazenamento local"""
+        if not password:
+            return ""
+        # Adiciona um salt simples baseado no username para ofuscar melhor
+        username = self.username.get().strip()
+        salt = f"{username}_rpa_salt"
+        password_with_salt = f"{password}_{salt}"
+        return base64.b64encode(password_with_salt.encode('utf-8')).decode('utf-8')
+
+    def _decode_password(self, encoded_password):
+        """Decodifica a senha armazenada"""
+        if not encoded_password:
+            return ""
+        try:
+            decoded = base64.b64decode(encoded_password.encode('utf-8')).decode('utf-8')
+            # Remove o salt
+            username = self.username.get().strip()
+            salt = f"{username}_rpa_salt"
+            if decoded.endswith(f"_{salt}"):
+                return decoded[:-len(f"_{salt}")]
+            return decoded
+        except:
+            return ""
+
     def clear_logs(self):
         self.log_text.delete(1.0, tk.END)
 
     def clear_credentials(self):
         self.username.set("")
         self.password.set("")
+        self.save_credentials.set(False)
         self.set_initial_focus()
+
+    def clear_saved_credentials(self):
+        """Remove as credenciais salvas do arquivo de configuração"""
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    config = json.load(f)
+                config.pop('last_username', None)
+                config.pop('last_password', None)
+                config['save_credentials'] = False
+                with open(CONFIG_FILE, 'w') as f:
+                    json.dump(config, f, indent=2)
+                self.log("Credenciais salvas foram removidas", "INFO")
+        except Exception as e:
+            self.log(f"Erro ao limpar credenciais salvas: {e}", "ERROR")
 
     def show_about(self):
         about_text = f"""Sistema RPA - Clínica
@@ -344,16 +397,23 @@ Os módulos serão implementados gradualmente.
         """
         messagebox.showinfo("Sobre", about_text)
 
-    def load_last_username(self):
+    def load_last_credentials(self):
         try:
             if os.path.exists(CONFIG_FILE):
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
                     last_user = config.get('last_username', '')
+                    last_password_encoded = config.get('last_password', '')
+                    save_credentials = config.get('save_credentials', False)
+
                     if last_user:
                         self.username.set(last_user)
+                    if last_password_encoded and save_credentials:
+                        decoded_password = self._decode_password(last_password_encoded)
+                        self.password.set(decoded_password)
+                    self.save_credentials.set(save_credentials)
         except Exception as e:
-            self.log(f"Erro ao carregar usuário salvo: {e}", "ERROR")
+            self.log(f"Erro ao carregar credenciais salvas: {e}", "ERROR")
 
     def save_last_username(self):
         try:
@@ -361,11 +421,28 @@ Os módulos serão implementados gradualmente.
             if os.path.exists(CONFIG_FILE):
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
+            
+            # Sempre salva o usuário
             config['last_username'] = self.username.get().strip()
+            
+            # Salva senha e opção apenas se o usuário escolheu salvar credenciais
+            config['save_credentials'] = self.save_credentials.get()
+            if self.save_credentials.get():
+                config['last_password'] = self._encode_password(self.password.get().strip())
+            else:
+                # Remove senha salva se usuário desabilitou a opção
+                config.pop('last_password', None)
+            
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
         except Exception as e:
-            self.log(f"Erro ao salvar usuário: {e}", "ERROR")
+            self.log(f"Erro ao salvar credenciais: {e}", "ERROR")
+
+    def on_save_credentials_changed(self):
+        if self.save_credentials.get():
+            self.log("Credenciais serão salvas localmente", "INFO")
+        else:
+            self.log("Credenciais não serão salvas localmente", "INFO")
 
     def on_closing(self):
         if self.username.get().strip():

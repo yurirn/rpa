@@ -86,6 +86,106 @@ class MacroGastricaModule(BaseModule):
                 return False
             return True
 
+    def verificar_elemento_interativo(self, driver, elemento):
+        """Verifica se um elemento está realmente interativo"""
+        try:
+            # Verificar se o elemento está visível e habilitado
+            if not elemento.is_displayed() or not elemento.is_enabled():
+                return False
+            
+            # Verificar se o elemento não está sobreposto por outros elementos
+            rect = elemento.rect
+            center_x = rect['x'] + rect['width'] / 2
+            center_y = rect['y'] + rect['height'] / 2
+            
+            # Usar JavaScript para verificar se o elemento está realmente clicável
+            is_clickable = driver.execute_script("""
+                var elem = arguments[0];
+                var rect = elem.getBoundingClientRect();
+                var centerX = rect.left + rect.width / 2;
+                var centerY = rect.top + rect.height / 2;
+                
+                // Verificar se há algum elemento sobrepondo
+                var elementAtPoint = document.elementFromPoint(centerX, centerY);
+                return elementAtPoint === elem || elem.contains(elementAtPoint);
+            """, elemento)
+            
+            return is_clickable
+        except:
+            return False
+
+    def aguardar_pagina_estavel(self, driver, wait, timeout=10):
+        """Aguarda até que a página esteja estável (sem animações ou carregamentos)"""
+        try:
+            # Aguardar até que não haja requisições AJAX em andamento
+            driver.execute_script("""
+                return new Promise((resolve) => {
+                    if (window.jQuery && window.jQuery.active === 0) {
+                        resolve();
+                        return;
+                    }
+                    
+                    var checkInterval = setInterval(() => {
+                        if (window.jQuery && window.jQuery.active === 0) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+                    
+                    // Timeout de segurança
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }, arguments[0]);
+                });
+            """, timeout * 1000)
+            
+            # Aguardar um pouco mais para garantir estabilidade
+            time.sleep(0.5)
+            log_message("✅ Página estável", "INFO")
+            
+        except Exception as e:
+            log_message(f"⚠️ Erro ao aguardar página estável: {e}", "WARNING")
+            time.sleep(1)  # Fallback
+
+    def aguardar_spinner_desaparecer(self, driver, wait, timeout=30):
+        """Aguarda até que o spinner de loading desapareça"""
+        try:
+            log_message("⏳ Aguardando spinner desaparecer...", "INFO")
+            
+            # Aguardar até que o spinner não esteja mais visível
+            wait.until(EC.invisibility_of_element_located((By.ID, "spinner")))
+            
+            # Aguardar um pouco mais para garantir que não há outros spinners
+            time.sleep(1)
+            
+            # Verificar se há outros spinners ou modais de loading
+            spinners = driver.find_elements(By.CSS_SELECTOR, ".loadModal, .spinner, [class*='loading']")
+            for spinner in spinners:
+                if spinner.is_displayed():
+                    log_message("⚠️ Outro spinner ainda visível, aguardando...", "WARNING")
+                    time.sleep(2)
+                    break
+            
+            log_message("✅ Spinner desapareceu", "SUCCESS")
+            
+        except Exception as e:
+            log_message(f"⚠️ Erro ao aguardar spinner: {e}", "WARNING")
+            # Tentar fechar o spinner via JavaScript se necessário
+            try:
+                driver.execute_script("""
+                    var spinners = document.querySelectorAll('.loadModal, .spinner, [class*="loading"]');
+                    spinners.forEach(function(spinner) {
+                        if (spinner.style.display !== 'none') {
+                            spinner.style.display = 'none';
+                        }
+                    });
+                """)
+                log_message("🔧 Spinner fechado via JavaScript", "INFO")
+                time.sleep(1)
+            except:
+                pass
+
     def selecionar_responsavel_macroscopia(self, driver, wait, responsavel_macro):
         """Seleciona o responsável pela macroscopia conforme o nome recebido (nome curto)"""
         # Mapper de nomes: primeiro nome em caixa alta -> nome completo
@@ -309,7 +409,7 @@ class MacroGastricaModule(BaseModule):
         time.sleep(0.3)
 
     def definir_grupo_baseado_mascara(self, driver, wait, mascara):
-        """Define o grupo baseado na máscara (Estômago ou Intestino) - versão simplificada e confiável."""
+        """Define o grupo baseado na máscara (Estômago ou Intestino) - versão melhorada com JavaScript."""
         if not mascara:
             log_message("⚠️ Nenhuma máscara fornecida para definir grupo", "WARNING")
             return
@@ -327,81 +427,221 @@ class MacroGastricaModule(BaseModule):
             return
 
         try:
-            # Tentar clicar na âncora de grupo (apenas a primeira encontrada com 'Vazio')
+            # Verificar se o input existe e qual o valor atual
             try:
-                campo_grupo = wait.until(
-                    EC.element_to_be_clickable((By.XPATH,
-                                                "//div[@id='fragmentosContainer']//a[contains(@class, 'table-editable-ancora') and contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
-                )
+                input_grupo = driver.find_element(By.ID, "idRegiao")
+                valor_atual = input_grupo.get_attribute("value")
+                
+                if valor_atual == grupo_selecionado:
+                    log_message(f"✅ Grupo já está definido como '{grupo_selecionado}' - pulando", "SUCCESS")
+                    return
+                elif valor_atual and valor_atual != grupo_selecionado:
+                    log_message(f"⚠️ Grupo atual é '{valor_atual}', precisa mudar para '{grupo_selecionado}'", "WARNING")
+                else:
+                    log_message(f"📝 Campo de grupo vazio, definindo como '{grupo_selecionado}'", "INFO")
             except:
-                # Fallback: procurar qualquer âncora de autocomplete vazia
-                campo_grupo = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@class, 'autocomplete') and contains(text(), 'Vazio')]"))
-                )
-            campo_grupo.click()
-            log_message(f"🔍 Clicou no campo de grupo", "INFO")
-            time.sleep(0.3)
+                log_message("⚠️ Campo idRegiao não encontrado", "WARNING")
+                return
+            
+            # Tentar encontrar especificamente o campo de grupo pelo ID idRegiao
+            script = """
+            // Procurar especificamente pelo campo de grupo que tem o input com id="idRegiao"
+            var inputGrupo = document.getElementById('idRegiao');
+            if (inputGrupo) {
+                // Encontrar a âncora que está no mesmo td que o input idRegiao
+                var parentTd = inputGrupo.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null) {
+                        return ancora;
+                    }
+                }
+            }
+            
+            // Fallback: procurar por âncoras que estejam próximas a inputs de grupo
+            var inputsGrupo = document.querySelectorAll('input[id*="Regiao"], input[data-autocompleteurl*="consultarRegiao"]');
+            for (var i = 0; i < inputsGrupo.length; i++) {
+                var input = inputsGrupo[i];
+                var parentTd = input.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null) {
+                        return ancora;
+                    }
+                }
+            }
+            
+            // Último fallback: procurar por âncoras que não sejam de procedimento
+            var fragmentosContainer = document.getElementById('fragmentosContainer');
+            if (fragmentosContainer) {
+                var elementos = fragmentosContainer.querySelectorAll('a[class*="table-editable-ancora"]');
+                for (var i = 0; i < elementos.length; i++) {
+                    var elemento = elementos[i];
+                    if (elemento.textContent.includes('Vazio') && elemento.offsetParent !== null) {
+                        var parentTd = elemento.closest('td');
+                        if (parentTd && !parentTd.querySelector('input[id*="procedimento"]')) {
+                            return elemento;
+                        }
+                    }
+                }
+            }
+            return null;
+            """
+            campo_grupo = driver.execute_script(script)
+                
+            if campo_grupo:
+                # Usar JavaScript para clicar no elemento
+                driver.execute_script("arguments[0].click();", campo_grupo)
+                log_message(f"🔍 Clicou no campo de grupo via JS", "INFO")
+                time.sleep(0.5)
 
-            # Aguardar o campo de input aparecer
-            input_grupo = wait.until(
-                EC.presence_of_element_located((By.ID, "idRegiao"))
-            )
-            input_grupo.clear()
-            input_grupo.send_keys(grupo_selecionado)
-            time.sleep(0.5)
-            input_grupo.send_keys(Keys.TAB)
-            log_message(f"✍️ Digitou '{grupo_selecionado}' no campo grupo", "SUCCESS")
-            time.sleep(0.3)
+                # Aguardar o campo de input aparecer e preencher via JavaScript
+                input_grupo = wait.until(
+                    EC.presence_of_element_located((By.ID, "idRegiao"))
+                )
+                
+                # Limpar o campo primeiro
+                driver.execute_script("arguments[0].value = '';", input_grupo)
+                
+                # Preencher via JavaScript
+                driver.execute_script("""
+                    arguments[0].value = arguments[1];
+                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """, input_grupo, grupo_selecionado)
+                
+                # Aguardar um pouco para o dropdown aparecer e tentar clicar na opção
+                time.sleep(0.5)
+                
+                # Tentar clicar na opção do dropdown com timeout menor
+                try:
+                    # Aguardar até 3 segundos pela opção aparecer
+                    wait_dropdown = WebDriverWait(driver, 3)
+                    opcao_dropdown = wait_dropdown.until(
+                        EC.element_to_be_clickable((By.XPATH, f"//li[contains(@class, 'active')]//a[contains(text(), '{grupo_selecionado}')]"))
+                    )
+                    opcao_dropdown.click()
+                    log_message(f"✅ Selecionou '{grupo_selecionado}' no dropdown", "SUCCESS")
+                except:
+                    # Se não conseguir clicar no dropdown rapidamente, pressionar Enter
+                    try:
+                        input_grupo.send_keys(Keys.ENTER)
+                        log_message(f"✍️ Pressionou Enter para confirmar '{grupo_selecionado}' (dropdown não apareceu)", "SUCCESS")
+                    except:
+                        # Último recurso: clicar fora para fechar o dropdown
+                        driver.execute_script("document.body.click();")
+                        log_message(f"🔍 Clicou fora para fechar dropdown de '{grupo_selecionado}'", "INFO")
+                
+                time.sleep(0.5)
+            else:
+                log_message("⚠️ Campo de grupo não encontrado ou não visível", "WARNING")
+                
         except Exception as e:
             log_message(f"⚠️ Erro ao definir grupo: {e}", "WARNING")
 
     def definir_representacao_secao(self, driver, wait):
-        """Define a representação como 'Seção'"""
+        """Define a representação como 'Seção' usando JavaScript"""
         try:
-            # Procurar especificamente o campo de representação na linha correta
+            # Verificar se o select existe e qual o valor atual
             try:
-                campo_representacao = wait.until(
-                    EC.element_to_be_clickable((By.XPATH,
-                                                "//div[@id='fragmentosContainer']//a[contains(@class, 'table-editable-ancora') and contains(text(), 'representação')]"))
-                )
+                select_representacao = driver.find_element(By.ID, "representacao")
+                valor_atual = select_representacao.get_attribute("value")
+                
+                if valor_atual == "S":
+                    log_message("✅ Representação já está definida como 'Seção'", "SUCCESS")
+                    return
+                elif valor_atual != "S":
+                    log_message(f"⚠️ Representação atual é '{valor_atual}', mas precisa ser 'S' (Seção)", "WARNING")
             except:
-                # Fallback: procurar qualquer âncora de representação
-                campo_representacao = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@class, 'table-editable-ancora')]"))
-                )
-
-            # Verificar se já está definida como "Seção"
-            if "Seção" in campo_representacao.text:
-                log_message("✅ Representação já está definida como 'Seção'", "SUCCESS")
+                log_message("⚠️ Campo representacao não encontrado", "WARNING")
+                return
+            
+            # Procurar especificamente pelo campo de representação
+            script = """
+            // Procurar especificamente pelo campo de representação que tem o select com id="representacao"
+            var selectRepresentacao = document.getElementById('representacao');
+            if (selectRepresentacao) {
+                // Encontrar a âncora que está no mesmo td que o select representacao
+                var parentTd = selectRepresentacao.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null) {
+                        return ancora;
+                    }
+                }
+            }
+            
+            // Fallback: procurar por âncoras que estejam próximas a selects de representação
+            var selectsRepresentacao = document.querySelectorAll('select[id*="representacao"], select[name*="representacao"]');
+            for (var i = 0; i < selectsRepresentacao.length; i++) {
+                var select = selectsRepresentacao[i];
+                var parentTd = select.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null) {
+                        return ancora;
+                    }
+                }
+            }
+            
+            // Último fallback: procurar por texto "representação" ou "-- representação --" que não seja de procedimento
+            var fragmentosContainer = document.getElementById('fragmentosContainer');
+            if (fragmentosContainer) {
+                var elementos = fragmentosContainer.querySelectorAll('a[class*="table-editable-ancora"]');
+                for (var i = 0; i < elementos.length; i++) {
+                    var elemento = elementos[i];
+                    if ((elemento.textContent.toLowerCase().includes('representação') || elemento.textContent.includes('-- representação --')) && elemento.offsetParent !== null) {
+                        var parentTd = elemento.closest('td');
+                        if (parentTd && !parentTd.querySelector('input[id*="procedimento"]')) {
+                            return elemento;
+                        }
+                    }
+                }
+            }
+            return null;
+            """
+            campo_representacao = driver.execute_script(script)
+            
+            if not campo_representacao:
+                log_message("⚠️ Campo de representação não encontrado", "WARNING")
                 return
 
-            # Se não estiver, clicar para alterar
-            campo_representacao.click()
-            log_message("🔍 Clicou no campo de representação", "INFO")
-            time.sleep(0.3)
+            # Verificar o texto da âncora para log
+            if "Seção" in campo_representacao.text:
+                log_message("✅ Representação já mostra 'Seção', mas vamos garantir", "INFO")
+            elif "-- representação --" in campo_representacao.text:
+                log_message("📝 Campo de representação encontrado, precisa ser preenchido", "INFO")
+            else:
+                log_message(f"⚠️ Texto inesperado no campo de representação: '{campo_representacao.text}'", "WARNING")
 
-            # Aguardar o select aparecer
+            # Clicar via JavaScript
+            driver.execute_script("arguments[0].click();", campo_representacao)
+            log_message("🔍 Clicou no campo de representação via JS", "INFO")
+            time.sleep(0.5)
+
+            # Aguardar o select aparecer e selecionar via JavaScript
             select_representacao = wait.until(
                 EC.presence_of_element_located((By.ID, "representacao"))
             )
 
-            # Aguardar o select ficar visível
-            wait.until(EC.element_to_be_clickable(select_representacao))
+            # Selecionar "Seção" (valor "S") via JavaScript
+            driver.execute_script("""
+                arguments[0].value = 'S';
+                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            """, select_representacao)
 
-            # Selecionar "Seção" (valor "S")
-            select = Select(select_representacao)
-            select.select_by_value("S")
-
-            campo_representacao.send_keys(Keys.ENTER)
-
-            log_message("✅ Representação definida como 'Seção'", "SUCCESS")
+            log_message("✅ Representação definida como 'Seção' via JS", "SUCCESS")
+            time.sleep(0.5)
+            
+            # Clicar fora para confirmar a seleção
+            driver.execute_script("document.body.click();")
             time.sleep(0.3)
 
         except Exception as e:
             log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
 
     def definir_regiao_gastrica(self, driver, wait, mascara=None):
-        """Define a região de acordo com a máscara, conforme regras fornecidas"""
+        """Define a região de acordo com a máscara usando JavaScript"""
         try:
             if not mascara:
                 log_message("⚠️ Nenhuma máscara fornecida para definir região", "WARNING")
@@ -429,97 +669,241 @@ class MacroGastricaModule(BaseModule):
 
             if mascara_upper in mascaras_sem_regiao_norm:
                 log_message(f"⚠️ Máscara '{mascara}' não exige preenchimento de região (manual)", "WARNING")
-                # Forçar foco no campo de quantidade de fragmentos para evitar erro de interatividade
-                try:
-                    input_quantidade = wait.until(
-                        EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_')]"))
-                    )
-                    driver.execute_script("arguments[0].focus();", input_quantidade)
-                    log_message("🔍 Foco forçado no campo de quantidade de fragmentos (manual)", "INFO")
-                except Exception as e:
-                    log_message(f"⚠️ Não foi possível forçar foco no campo de quantidade: {e}", "WARNING")
                 return
 
             regiao_valor = mascara_map.get(mascara_upper)
             if not regiao_valor:
                 log_message(f"⚠️ Máscara '{mascara}' não encontrada nas regras de região", "WARNING")
+                log_message(f"🔍 Máscaras disponíveis: {list(mascara_map.keys())}", "INFO")
                 return
+            
+            log_message(f"📝 Máscara '{mascara}' → Região '{regiao_valor}'", "INFO")
 
-            # Procurar a âncora correspondente à região
+            # Verificar se já existe um campo de região preenchido
             try:
-                campo_regiao = wait.until(
-                    EC.element_to_be_clickable((By.XPATH,
-                                                "//input[contains(@name, 'regiao_')]/following-sibling::a[contains(@class, 'table-editable-ancora')]"))
-                )
+                inputs_regiao = driver.find_elements(By.XPATH, "//input[contains(@name, 'regiao_')]")
+                for input_reg in inputs_regiao:
+                    valor_atual = input_reg.get_attribute("value")
+                    if valor_atual == regiao_valor:
+                        log_message(f"✅ Região já está definida como '{regiao_valor}' - pulando", "SUCCESS")
+                        return
+                    elif valor_atual:
+                        log_message(f"⚠️ Região atual é '{valor_atual}', precisa mudar para '{regiao_valor}'", "WARNING")
             except:
-                campos_vazios = driver.find_elements(By.XPATH,
-                                                     "//a[contains(@class, 'table-editable-ancora') and contains(text(), 'Vazio')]")
-                if len(campos_vazios) >= 3:
-                    campo_regiao = campos_vazios[2]
-                else:
-                    campo_regiao = campos_vazios[-1]
+                pass
 
-            # Clicar na âncora apenas se for visível e habilitada
-            if campo_regiao.is_displayed() and campo_regiao.is_enabled():
-                campo_regiao.click()
-                log_message("🔍 Clicou no campo de região", "INFO")
-                time.sleep(0.3)
+            # Procurar especificamente pelos campos de região na tabela de fragmentos
+            script = """
+            // Procurar especificamente por campos de região na tabela de fragmentos
+            var tbody = document.getElementById('tdRegiao');
+            if (tbody) {
+                var inputs = tbody.querySelectorAll('input[name*="regiao_"]');
+                console.log('Encontrados', inputs.length, 'inputs de região');
+                for (var i = 0; i < inputs.length; i++) {
+                    var input = inputs[i];
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        console.log('Âncora encontrada:', ancora ? ancora.textContent : 'null');
+                        if (ancora && ancora.offsetParent !== null) {
+                            // Verificar se está vazio ou pode ser preenchido
+                            if (ancora.textContent.includes('Vazio') || input.value === '') {
+                                return {element: ancora, input: input};
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: procurar qualquer campo de região
+            var todosInputs = document.querySelectorAll('input[name*="regiao_"]');
+            console.log('Fallback: encontrados', todosInputs.length, 'inputs de região');
+            for (var i = 0; i < todosInputs.length; i++) {
+                var input = todosInputs[i];
+                var parentTd = input.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null) {
+                        return {element: ancora, input: input};
+                    }
+                }
+            }
+            return null;
+            """
+            resultado_regiao = driver.execute_script(script)
+            
+            if resultado_regiao:
+                campo_regiao = resultado_regiao['element']
+                input_regiao = resultado_regiao['input']
+                
+                # Verificar valor atual do input
+                valor_atual = input_regiao.get_attribute("value")
+                if valor_atual == regiao_valor:
+                    log_message(f"✅ Região já está definida como '{regiao_valor}' - pulando", "SUCCESS")
+                    return
+                
+                # Clicar via JavaScript
+                driver.execute_script("arguments[0].click();", campo_regiao)
+                log_message("🔍 Clicou no campo de região via JS", "INFO")
+                time.sleep(0.5)
+
+                # Preencher via JavaScript
+                try:
+                    # Aguardar um pouco para o campo ficar ativo
+                    time.sleep(0.5)
+                    
+                    # Preencher via JavaScript
+                    driver.execute_script("""
+                        arguments[0].value = arguments[1];
+                        arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));
+                    """, input_regiao, regiao_valor)
+                    
+                    log_message(f"✍️ Definiu região como '{regiao_valor}' via JS", "SUCCESS")
+                    time.sleep(1)
+                    
+                    # Verificar se o valor foi realmente definido
+                    valor_definido = input_regiao.get_attribute("value")
+                    if valor_definido == regiao_valor:
+                        log_message(f"✅ Valor de região confirmado: '{valor_definido}'", "SUCCESS")
+                    else:
+                        log_message(f"⚠️ Valor não foi definido corretamente. Esperado: '{regiao_valor}', Atual: '{valor_definido}'", "WARNING")
+                        
+                except Exception as input_error:
+                    log_message(f"⚠️ Erro ao preencher input de região: {input_error}", "WARNING")
             else:
-                log_message("⚠️ Campo de região não está interativo, pulando clique", "WARNING")
-                return
-
-            # Esperar o input ficar clicável e visível
-            input_regiao = wait.until(EC.element_to_be_clickable((By.XPATH, "//input[contains(@name, 'regiao_')]")))
-
-            # Usar JavaScript para garantir que o campo está visível e interativo
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_regiao)
-            driver.execute_script("arguments[0].focus();", input_regiao)
-
-            # Definir o valor conforme a regra
-            input_regiao.clear()
-            input_regiao.send_keys(regiao_valor)
-            log_message(f"✍️ Definiu região como '{regiao_valor}'", "SUCCESS")
-            time.sleep(0.3)
-
-            # Pressionar Tab para confirmar o valor
-            input_regiao.send_keys(Keys.TAB)
+                log_message("⚠️ Campo de região não encontrado ou não visível", "WARNING")
 
         except Exception as e:
             log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
     def definir_quantidade_fragmentos(self, driver, wait, campo_d):
-        """Define a quantidade de fragmentos baseado no campo D da planilha, sempre via JavaScript, sem scrollIntoView."""
+        """Define a quantidade de fragmentos usando JavaScript melhorado"""
         try:
             if not campo_d or campo_d.strip() == "":
                 log_message("⚠️ Campo D está vazio, não definindo quantidade", "WARNING")
                 return
 
-            input_quantidade = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_')]"))
-            )
+            # Procurar especificamente pelos campos de quantidade na tabela de fragmentos
+            script = """
+            // Procurar especificamente por campos de quantidade na tabela de fragmentos
+            var tbody = document.getElementById('tdRegiao');
+            if (tbody) {
+                var inputs = tbody.querySelectorAll('input[name*="quantidade_"]');
+                for (var i = 0; i < inputs.length; i++) {
+                    var input = inputs[i];
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
+                            return ancora;
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: procurar qualquer campo de quantidade que contenha "Vazio"
+            var todosInputs = document.querySelectorAll('input[name*="quantidade_"]');
+            for (var i = 0; i < todosInputs.length; i++) {
+                var input = todosInputs[i];
+                var parentTd = input.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
+                        return ancora;
+                    }
+                }
+            }
+            return null;
+            """
+            campo_quantidade = driver.execute_script(script)
+            
+            if campo_quantidade:
+                # Clicar na âncora para abrir o campo
+                driver.execute_script("arguments[0].click();", campo_quantidade)
+                log_message("🔍 Clicou no campo de quantidade via JS", "INFO")
+                time.sleep(0.5)
 
-            # Preencher o campo diretamente via JavaScript, sem scroll nem focus
-            driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", input_quantidade, campo_d.strip())
-            log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}' via JS", "SUCCESS")
-
-            # Pressionar Tab para confirmar
-            input_quantidade.send_keys(Keys.TAB)
+                # Aguardar o input aparecer e preencher via JavaScript
+                input_quantidade = wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_') and @style='display: none;']"))
+                )
+                
+                # Preencher via JavaScript
+                driver.execute_script("""
+                    arguments[0].value = arguments[1];
+                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """, input_quantidade, campo_d.strip())
+                
+                log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}' via JS", "SUCCESS")
+                time.sleep(0.3)
+            else:
+                log_message("⚠️ Campo de quantidade não encontrado ou não visível", "WARNING")
 
         except Exception as e:
             log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
 
     def definir_quantidade_blocos(self, driver, wait):
-        """Define a quantidade de blocos como '1', sempre via JavaScript, sem scrollIntoView."""
+        """Define a quantidade de blocos usando JavaScript melhorado"""
         try:
-            input_blocos = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_')]")))
+            # Procurar especificamente pelos campos de quantidade de blocos na tabela de fragmentos
+            script = """
+            // Procurar especificamente por campos de quantidade de blocos na tabela de fragmentos
+            var tbody = document.getElementById('tdRegiao');
+            if (tbody) {
+                var inputs = tbody.querySelectorAll('input[name*="quantidadeBlocos_"]');
+                for (var i = 0; i < inputs.length; i++) {
+                    var input = inputs[i];
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
+                            return ancora;
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: procurar qualquer campo de quantidade de blocos que contenha "Vazio"
+            var todosInputs = document.querySelectorAll('input[name*="quantidadeBlocos_"]');
+            for (var i = 0; i < todosInputs.length; i++) {
+                var input = todosInputs[i];
+                var parentTd = input.closest('td');
+                if (parentTd) {
+                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                    if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
+                        return ancora;
+                    }
+                }
+            }
+            return null;
+            """
+            campo_blocos = driver.execute_script(script)
+            
+            if campo_blocos:
+                # Clicar na âncora para abrir o campo
+                driver.execute_script("arguments[0].click();", campo_blocos)
+                log_message("🔍 Clicou no campo de quantidade de blocos via JS", "INFO")
+                time.sleep(0.5)
 
-            # Preencher o campo diretamente via JavaScript, sem scroll nem focus
-            driver.execute_script("arguments[0].value = '1'; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", input_blocos)
-            log_message("✍️ Definiu quantidade de blocos como '1' via JS", "SUCCESS")
-
-            # Pressionar Tab para confirmar
-            input_blocos.send_keys(Keys.TAB)
+                # Aguardar o input aparecer e preencher via JavaScript
+                input_blocos = wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_') and @style='display: none;']"))
+                )
+                
+                # Preencher via JavaScript
+                driver.execute_script("""
+                    arguments[0].value = '1';
+                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """, input_blocos)
+                
+                log_message("✍️ Definiu quantidade de blocos como '1' via JS", "SUCCESS")
+                time.sleep(0.3)
+            else:
+                log_message("⚠️ Campo de quantidade de blocos não encontrado ou não visível", "WARNING")
 
         except Exception as e:
             log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
@@ -544,7 +928,9 @@ class MacroGastricaModule(BaseModule):
             # Clicar no botão
             botao_salvar_fragmentos.click()
             log_message("💾 Clicou em Salvar fragmentos", "SUCCESS")
-            time.sleep(1.5)  # Aguardar o processamento
+            
+            # Aguardar que o spinner desapareça após salvar
+            self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
             
         except Exception as e:
             log_message(f"⚠️ Erro ao salvar fragmentos: {e}", "WARNING")
@@ -558,7 +944,7 @@ class MacroGastricaModule(BaseModule):
                 time.sleep(0.5)
                 botao_titulo.click()
                 log_message("💾 Clicou em Salvar fragmentos (por título)", "SUCCESS")
-                time.sleep(1.5)
+                self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
                 return
             except:
                 pass
@@ -572,7 +958,7 @@ class MacroGastricaModule(BaseModule):
                 time.sleep(0.5)
                 botao_texto.click()
                 log_message("💾 Clicou em Salvar fragmentos (por texto)", "SUCCESS")
-                time.sleep(1.5)
+                self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
                 return
             except:
                 pass
@@ -585,20 +971,66 @@ class MacroGastricaModule(BaseModule):
         try:
             log_message("📝 Iniciando preenchimento dos campos pré-envio...", "INFO")
             
-            # 1. Definir grupo baseado na máscara
-            self.definir_grupo_baseado_mascara(driver, wait, mascara)
+            # Aguardar que a página esteja estável
+            self.aguardar_pagina_estavel(driver, wait)
             
-            # 2. Definir representação como "Seção"
-            self.definir_representacao_secao(driver, wait)
+            # Verificar se estamos na página correta
+            try:
+                fragmentos_container = driver.find_element(By.ID, "fragmentosContainer")
+                if not fragmentos_container.is_displayed():
+                    log_message("⚠️ Container de fragmentos não está visível", "WARNING")
+                    return
+            except:
+                log_message("⚠️ Container de fragmentos não encontrado", "WARNING")
+                return
+            
+            # Verificar se há elementos interativos antes de prosseguir
+            try:
+                elementos_interativos = driver.find_elements(By.XPATH, "//a[contains(@class, 'table-editable-ancora')]")
+                if not elementos_interativos:
+                    log_message("⚠️ Nenhum elemento interativo encontrado", "WARNING")
+                    return
+                log_message(f"🔍 Encontrados {len(elementos_interativos)} elementos interativos", "INFO")
+            except:
+                log_message("⚠️ Erro ao verificar elementos interativos", "WARNING")
+                return
+            
+            # 1. Definir grupo baseado na máscara - SEMPRE EXECUTAR
+            log_message(f"📝 Definindo grupo para máscara: {mascara}", "INFO")
+            try:
+                self.definir_grupo_baseado_mascara(driver, wait, mascara)
+                self.aguardar_pagina_estavel(driver, wait, timeout=3)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao definir grupo: {e}", "WARNING")
+            
+            # 2. Definir representação como "Seção" - SEMPRE EXECUTAR
+            log_message("📝 Definindo representação como Seção", "INFO")
+            try:
+                self.definir_representacao_secao(driver, wait)
+                self.aguardar_pagina_estavel(driver, wait, timeout=3)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
             
             # 3. Definir região como "GA: Gastrica"
-            self.definir_regiao_gastrica(driver, wait, mascara)
+            try:
+                self.definir_regiao_gastrica(driver, wait, mascara)
+                self.aguardar_pagina_estavel(driver, wait, timeout=3)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
             # 4. Definir quantidade de fragmentos (campo D)
-            self.definir_quantidade_fragmentos(driver, wait, campo_d)
+            try:
+                self.definir_quantidade_fragmentos(driver, wait, campo_d)
+                self.aguardar_pagina_estavel(driver, wait, timeout=3)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
             
             # 5. Definir quantidade de blocos como "1"
-            self.definir_quantidade_blocos(driver, wait)
+            try:
+                self.definir_quantidade_blocos(driver, wait)
+                self.aguardar_pagina_estavel(driver, wait, timeout=3)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
             
             log_message("✅ Campos pré-envio preenchidos com sucesso!", "SUCCESS")
             
@@ -609,14 +1041,72 @@ class MacroGastricaModule(BaseModule):
     def enviar_proxima_etapa(self, driver, wait):
         """Clica no botão de enviar para próxima etapa"""
         try:
+            # Aguardar que a página esteja estável primeiro
+            self.aguardar_pagina_estavel(driver, wait)
+            
+            # Aguardar que o spinner desapareça
+            self.aguardar_spinner_desaparecer(driver, wait)
+            
+            # Tentar encontrar o botão
             botao_enviar = wait.until(
                 EC.element_to_be_clickable((By.ID, "btn-enviar-proxima-etapa"))
             )
-            botao_enviar.click()
-            log_message("➡️ Clicou em Enviar para próxima etapa", "INFO")
-            time.sleep(1.5)
+            
+            # Verificar se o botão está realmente clicável
+            if not botao_enviar.is_displayed() or not botao_enviar.is_enabled():
+                log_message("⚠️ Botão não está visível ou habilitado", "WARNING")
+                raise Exception("Botão não está interativo")
+            
+            # Tentar clicar via JavaScript primeiro
+            try:
+                driver.execute_script("arguments[0].click();", botao_enviar)
+                log_message("➡️ Clicou em Enviar para próxima etapa via JS", "INFO")
+            except:
+                # Se JavaScript falhar, tentar clique normal
+                botao_enviar.click()
+                log_message("➡️ Clicou em Enviar para próxima etapa", "INFO")
+            
+            # Aguardar processamento
+            time.sleep(2)
+            
+            # Verificar se apareceu algum modal ou erro
+            try:
+                # Verificar se apareceu modal de assinatura
+                modal_assinatura = driver.find_element(By.ID, "assinatura")
+                if modal_assinatura.is_displayed():
+                    log_message("📋 Modal de assinatura detectado", "INFO")
+                    return {'status': 'aguardando_assinatura', 'detalhes': 'Modal de assinatura aberto'}
+            except:
+                pass
+            
+            # Verificar se há erros
+            try:
+                erros = driver.find_elements(By.CSS_SELECTOR, ".alert-danger, .error-message")
+                if erros:
+                    erro_texto = erros[0].text
+                    log_message(f"⚠️ Erro detectado: {erro_texto}", "WARNING")
+                    return {'status': 'erro', 'detalhes': erro_texto}
+            except:
+                pass
+            
+            log_message("✅ Envio para próxima etapa realizado com sucesso", "SUCCESS")
+            return {'status': 'sucesso', 'detalhes': 'Enviado para próxima etapa'}
+            
         except Exception as e:
             log_message(f"Erro ao enviar para próxima etapa: {e}", "ERROR")
+            
+            # Tentar fechar spinners que possam estar bloqueando
+            try:
+                driver.execute_script("""
+                    var spinners = document.querySelectorAll('.loadModal, .spinner, [class*="loading"]');
+                    spinners.forEach(function(spinner) {
+                        spinner.style.display = 'none';
+                    });
+                """)
+                log_message("🔧 Spinners fechados via JavaScript", "INFO")
+            except:
+                pass
+            
             raise
 
     def assinar_com_george(self, driver, wait):
@@ -948,10 +1438,24 @@ class MacroGastricaModule(BaseModule):
             self.salvar_fragmentos(driver, wait)
             
             # 10. Enviar para próxima etapa
-            self.enviar_proxima_etapa(driver, wait)
+            resultado_envio = self.enviar_proxima_etapa(driver, wait)
             
-            log_message("🎉 Processo de macroscopia finalizado com sucesso!", "SUCCESS")
-            return {'status': 'sucesso', 'detalhes': 'Macroscopia processada com sucesso'}
+            # Verificar o resultado do envio
+            if resultado_envio.get('status') == 'aguardando_assinatura':
+                log_message("📋 Modal de assinatura aberto - iniciando processo de assinatura", "INFO")
+                try:
+                    self.assinar_com_george(driver, wait)
+                    log_message("🎉 Processo de macroscopia e assinatura finalizado com sucesso!", "SUCCESS")
+                    return {'status': 'sucesso', 'detalhes': 'Macroscopia e assinatura processadas com sucesso'}
+                except Exception as assinatura_error:
+                    log_message(f"⚠️ Erro na assinatura: {assinatura_error}", "WARNING")
+                    return {'status': 'erro_assinatura', 'detalhes': str(assinatura_error)}
+            elif resultado_envio.get('status') == 'erro':
+                log_message(f"⚠️ Erro no envio para próxima etapa: {resultado_envio.get('detalhes')}", "WARNING")
+                return {'status': 'erro_envio', 'detalhes': resultado_envio.get('detalhes')}
+            else:
+                log_message("🎉 Processo de macroscopia finalizado com sucesso!", "SUCCESS")
+                return {'status': 'sucesso', 'detalhes': 'Macroscopia processada com sucesso'}
             
         except Exception as e:
             log_message(f"Erro durante processo de macroscopia: {e}", "ERROR")
