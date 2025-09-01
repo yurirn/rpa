@@ -266,7 +266,34 @@ class XMLGeneratorAutomation(BaseModule):
                 log_message("Execução cancelada pelo usuário.", "WARNING")
                 self.fechar_navegador()
                 return False
-            self.acessar_modulo_faturamento()
+
+            log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
+            current_url = self.driver.current_url
+
+            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+                log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
+                try:
+                    modulo_link = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']")))
+                    modulo_link.click()
+                    time.sleep(2)
+                    log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
+                    # Tentar navegar diretamente pela URL como fallback
+                    self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    time.sleep(2)
+                    log_message("🔄 Navegação direta para módulo realizada", "INFO")
+
+            elif "moduloFaturamento" in current_url:
+                log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
+            else:
+                log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
+                # Tentar navegar diretamente como fallback
+                self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                time.sleep(2)
+                log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
+
             self.fechar_modal_se_necessario()
             self.acessar_preparar_exames_para_fatura()
             self.configurar_filtros_e_pesquisar()
