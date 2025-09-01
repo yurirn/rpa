@@ -356,13 +356,34 @@ class ConclusaoModule(BaseModule):
             
             submit_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
             submit_button.click()
-            
-            log_message("Navegando para módulo de exames...", "INFO")
-            
-            # Navegar para o módulo de exames (módulo 1)
-            modulo_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
-            modulo_link.click()
-            time.sleep(2)
+
+            log_message("Verificando se precisa navegar para módulo de exames...", "INFO")
+            current_url = driver.current_url
+            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+                log_message("Detectada tela de seleção de módulos - navegando para módulo de exames...",
+                            "INFO")
+                try:
+                    modulo_link = wait.until(
+                        EC.element_to_be_clickable(
+                            (By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
+                    modulo_link.click()
+                    time.sleep(2)
+                    log_message("✅ Navegação para módulo de exames realizada", "SUCCESS")
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
+                    # Tentar navegar diretamente pela URL como fallback
+                    driver.get("https://pathoweb.com.br/moduloExame/index")
+                    time.sleep(2)
+                    log_message("🔄 Navegação direta para módulo realizada", "INFO")
+
+            elif "moduloExame" in current_url:
+                log_message("✅ Já está no módulo de exames - pulando navegação", "SUCCESS")
+            else:
+                log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
+                # Tentar navegar diretamente como fallback
+                driver.get("https://pathoweb.com.br/moduloExame/index")
+                time.sleep(2)
+                log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
             
             # Fechar modal se aparecer
             try:
