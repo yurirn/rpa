@@ -38,6 +38,7 @@ class PreparacaoLoteModule(BaseModule):
         modo_busca = params.get("modo_busca", "exame")  # padrão: exame
         cancel_flag = params.get("cancel_flag")
         gera_xml_tiss = params.get("gera_xml_tiss", "sim")
+        headless_mode = params.get("headless_mode")
         try:
             exames_unicos = self.get_unique_exames(excel_file, modo_busca)
         except Exception as e:
@@ -47,7 +48,7 @@ class PreparacaoLoteModule(BaseModule):
             messagebox.showerror("Erro", "Nenhum exame encontrado no arquivo.")
             return
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
-        driver = BrowserFactory.create_chrome()
+        driver = BrowserFactory.create_chrome(headless=headless_mode)
         wait = WebDriverWait(driver, 15)
         resultados = []
         try:

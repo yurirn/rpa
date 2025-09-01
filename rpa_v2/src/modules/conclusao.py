@@ -314,6 +314,7 @@ class ConclusaoModule(BaseModule):
         password = params.get("password")
         excel_file = params.get("excel_file")
         cancel_flag = params.get("cancel_flag")
+        headless_mode = params.get("headless_mode", False)
         
         try:
             # Lê os dados dos exames da planilha (código e máscara)
@@ -333,7 +334,7 @@ class ConclusaoModule(BaseModule):
         resultados = []
         
         try:
-            driver = BrowserFactory.create_chrome()
+            driver = BrowserFactory.create_chrome(headless=headless_mode)
             wait = WebDriverWait(driver, 20)
             
             log_message("Iniciando automação de conclusão...", "INFO")
@@ -394,7 +395,7 @@ class ConclusaoModule(BaseModule):
                             pass
                         
                         # Recriar browser e fazer login novamente
-                        driver = BrowserFactory.create_chrome()
+                        driver = BrowserFactory.create_chrome(headless=headless_mode)
                         wait = WebDriverWait(driver, 20)
                         
                         # Fazer login novamente

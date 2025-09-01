@@ -15,18 +15,19 @@ from src.core.logger import log_message
 from src.modules.base import BaseModule
 
 class UnimedUploader(BaseModule):
-    def __init__(self, username, password, driver=None, timeout=15):
+    def __init__(self, username, password, driver=None, timeout=15, headless=False):
         super().__init__(nome="Envio Lote Unimed")
         self.username = username
         self.password = password
         self.timeout = timeout
         self.driver = driver
         self.wait = None
+        self.headless = headless
 
     def inicializar_driver(self):
         if self.driver is None:
             log_message("Inicializando driver do Chrome para upload Unimed...", "INFO")
-            self.driver = BrowserFactory.create_chrome()
+            self.driver = BrowserFactory.create_chrome(headless=self.headless)
         self.wait = WebDriverWait(self.driver, self.timeout)
 
     def fazer_login(self):
@@ -79,7 +80,7 @@ class UnimedUploader(BaseModule):
             self.driver.quit()
 
 class XMLGeneratorAutomation(BaseModule):
-    def __init__(self, username, password, timeout=15, pasta_download=None, fechar_em_erro=False):
+    def __init__(self, username, password, timeout=15, pasta_download=None, fechar_em_erro=False, headless=False):
         super().__init__(nome="Geração e Envio XML Unimed")
         self.username = username
         self.password = password
@@ -94,9 +95,11 @@ class XMLGeneratorAutomation(BaseModule):
             self.pasta_download = pasta_download
         Path(self.pasta_download).mkdir(parents=True, exist_ok=True)
 
+        self.headless_mode = headless
+
     def inicializar_driver(self):
         log_message("Inicializando driver do Chrome para Pathoweb...", "INFO")
-        self.driver = BrowserFactory.create_chrome(download_dir=self.pasta_download)
+        self.driver = BrowserFactory.create_chrome(download_dir=self.pasta_download, headless=self.headless_mode)
         self.wait = WebDriverWait(self.driver, self.timeout)
 
     def fazer_login(self):
@@ -310,7 +313,8 @@ def run(params):
     unimed_pass = params.get("unimed_pass", "*Dap2025*")
     pasta_download = params.get("pasta_download", os.path.join(os.getcwd(), "xml"))
     cancel_flag = params.get("cancel_flag")
-    module = XMLGeneratorAutomation(username, password, pasta_download=pasta_download)
+    headless_mode = params.get("headless_mode", False)
+    module = XMLGeneratorAutomation(username, password, pasta_download=pasta_download, headless=headless_mode)
     sucesso = module.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
     if not sucesso:
         log_message("❌ Falha na automação de envio de lote Unimed.", "ERROR")

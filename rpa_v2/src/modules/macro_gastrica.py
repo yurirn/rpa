@@ -659,7 +659,8 @@ class MacroGastricaModule(BaseModule):
         password = params.get("password")
         excel_file = params.get("excel_file")
         cancel_flag = params.get("cancel_flag")
-        
+        headless_mode = params.get("headless_mode")
+
         try:
             # Lê os dados dos exames da planilha (código e máscara)
             dados_exames = self.get_dados_exames(excel_file)
@@ -678,7 +679,7 @@ class MacroGastricaModule(BaseModule):
         resultados = []
         
         try:
-            driver = BrowserFactory.create_chrome()
+            driver = BrowserFactory.create_chrome(headless=headless_mode)
             wait = WebDriverWait(driver, 10)
             
             log_message("Iniciando automação de macroscopia gástrica...", "INFO")
@@ -745,7 +746,7 @@ class MacroGastricaModule(BaseModule):
                             pass
                         
                         # Recriar browser e fazer login novamente
-                        driver = BrowserFactory.create_chrome()
+                        driver = BrowserFactory.create_chrome(headless=headless_mode)
                         wait = WebDriverWait(driver, 10)
                         
                         # Fazer login novamente

@@ -29,6 +29,7 @@ class MainWindow:
         self.excel_file_path = tk.StringVar()
         self.tipo_busca = tk.StringVar(value="numero_exame")
         self.gera_xml_tiss = tk.StringVar(value="sim")
+        self.headless_mode = tk.BooleanVar(value=False)
 
         self.modules = self.load_modules()
         self.module_id_map = {m['id']: m for m in self.modules}
@@ -97,9 +98,12 @@ class MainWindow:
         button_frame = ttk.Frame(frame)
         button_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
 
-        self.test_login_button = ttk.Button(button_frame, text="Testar Conexão", command=self.test_connection)
-        self.test_login_button.pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Limpar", command=self.clear_credentials).pack(side=tk.LEFT)
+        self.headless_check = ttk.Checkbutton(
+            frame,
+            text="Executar em segundo plano (modo headless)",
+            variable=self.headless_mode
+        )
+        self.headless_check.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
     def create_module_section(self, parent):
         frame = ttk.LabelFrame(parent, text="Módulo de Automação", padding="10")
@@ -131,6 +135,7 @@ class MainWindow:
         module_id = self.selected_module_id.get()
         module = self.module_id_map.get(module_id)
         requires_excel = module.get("requires_excel") if module else False
+        tipo_busca = module.get("tipo_busca") if module else False
         has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
 
         row = 0
@@ -141,15 +146,18 @@ class MainWindow:
             entry.grid(row=row, column=1, sticky="ew", padx=(0, 10))
             ttk.Button(self.params_frame, text="Selecionar", command=self.select_excel_file).grid(row=row, column=2)
             row += 1
+        if tipo_busca:
             ttk.Label(self.params_frame, text="Tipo de Busca:").grid(row=row, column=0, sticky="w", pady=(15, 5))
             busca_frame = ttk.Frame(self.params_frame)
             busca_frame.grid(row=row, column=1, sticky="w", columnspan=2)
             ttk.Radiobutton(busca_frame, text="Número de Exame", variable=self.tipo_busca, value="numero_exame", command=self.on_tipo_busca_changed).pack(side=tk.LEFT, padx=(0, 20))
             ttk.Radiobutton(busca_frame, text="Número de Guia", variable=self.tipo_busca, value="numero_guia", command=self.on_tipo_busca_changed).pack(side=tk.LEFT)
             row += 1
-            self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"), foreground="blue")
+            self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"),
+                                            foreground="blue")
             self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
             row += 1
+
         if has_gera_xml_tiss:
             ttk.Label(self.params_frame, text="Gera XML TISS?:").grid(row=row, column=0, sticky="w", pady=(15, 5))
             gera_xml_frame = ttk.Frame(self.params_frame)
@@ -262,7 +270,8 @@ class MainWindow:
         params = {
             "username": self.username.get(),
             "password": self.password.get(),
-            "cancel_flag": self.cancel_requested
+            "cancel_flag": self.cancel_requested,
+            "headless_mode": self.headless_mode.get()
         }
         if module.get("requires_excel"):
             excel_path = self.excel_file_path.get()

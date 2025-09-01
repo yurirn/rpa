@@ -5,7 +5,7 @@ import shutil
 
 class BrowserFactory:
     @staticmethod
-    def create_chrome(download_dir=None):
+    def create_chrome(download_dir=None, headless=False):
         print("🔧 Configurando opções do Chrome...")
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--no-sandbox")
@@ -15,7 +15,12 @@ class BrowserFactory:
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--allow-running-insecure-content")
         chrome_options.add_argument("--start-maximized")
-        #chrome_options.add_argument("--headless=new")
+
+        if headless:
+            chrome_options.add_argument("--headless=new")
+            print("👻 Modo headless ativado - navegador executará em segundo plano")
+        else:
+            print("👁️ Modo visual ativado - navegador será visível")
         
         # Adicionar argumentos para resolver problemas comuns
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")

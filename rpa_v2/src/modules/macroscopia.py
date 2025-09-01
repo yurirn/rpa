@@ -267,6 +267,7 @@ class MacroscopiaModule(BaseModule):
         password = params.get("password")
         excel_file = params.get("excel_file")
         cancel_flag = params.get("cancel_flag")
+        headless_mode = params.get("headless_mode")
         try:
             dados_exames = self.get_dados_exames(excel_file)
             if not dados_exames:
@@ -279,7 +280,7 @@ class MacroscopiaModule(BaseModule):
         driver = None
         resultados = []
         try:
-            driver = BrowserFactory.create_chrome()
+            driver = BrowserFactory.create_chrome(headless=headless_mode)
             wait = WebDriverWait(driver, DEFAULT_TIMEOUT)
             log_message("Iniciando automação de macroscopia...", "INFO")
             driver.get(url)

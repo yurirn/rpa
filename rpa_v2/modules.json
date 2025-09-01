@@ -5,6 +5,7 @@
     "description": "Automatiza a criação de novos exames no sistema",
     "module_path": "modules.criacao_exames",
     "requires_excel": false,
+    "tipo_busca": false,
     "has_gera_xml_tiss": false
   },
   {
@@ -13,6 +14,7 @@
     "description": "Lê arquivo Excel e marca exames como 'Conferido: On-line'",
     "module_path": "modules.preparacao_lote",
     "requires_excel": true,
+    "tipo_busca": true,
     "has_gera_xml_tiss": true
   },
   {
@@ -21,30 +23,25 @@
     "description": "Gera arquivo XML e faz o envio para a Unimed",
     "module_path": "modules.envio_lote_unimed",
     "requires_excel": false,
-    "has_gera_xml_tiss": false
-  },
-  {
-    "id": "envio_lote_unimed_100guias",
-    "name": "Envio Lote Unimed - + 100 Guias",
-    "description": "Gera arquivo XML com 100 guias e faz o envio para a Unimed",
-    "module_path": "modules.envio_lote_unimed_100guias",
-    "requires_excel": false,
+    "tipo_busca": false,
     "has_gera_xml_tiss": false
   },
   {
     "id": "conclusao",
-    "name": "Conclusão de Exame",
+    "name": "Conclusão de Exame - Dr George",
     "description": "",
     "module_path": "modules.conclusao",
     "requires_excel": true,
+    "tipo_busca": false,
     "has_gera_xml_tiss": false
   },
   {
     "id": "macroscopia",
-    "name": "Macroscopia",
+    "name": "Macroscopia - Papacon/Papaliq",
     "description": "",
     "module_path": "modules.macroscopia",
     "requires_excel": true,
+    "tipo_busca": false,
     "has_gera_xml_tiss": false
   },
   {
@@ -53,14 +50,7 @@
     "description": "",
     "module_path": "modules.macro_gastrica",
     "requires_excel": true,
-    "has_gera_xml_tiss": false
-  },
-  {
-    "id": "macroscopia_fixacao",
-    "name": "Macroscopia e Fixação",
-    "description": "Automatiza o processo de definição de responsável/auxiliar da macroscopia e data/hora de fixação",
-    "module_path": "modules.macroscopia_fixacao",
-    "requires_excel": true,
+    "tipo_busca": false,
     "has_gera_xml_tiss": false
   }
 ]
