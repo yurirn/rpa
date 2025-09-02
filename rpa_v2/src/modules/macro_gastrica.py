@@ -654,14 +654,16 @@ class MacroGastricaModule(BaseModule):
                 'AIC': 'AIC: Antro/Incisura/Corpo',
                 'AIF': 'AIF: Antro/Incisura/Fundo',
                 'ANTRO': 'AN: Antro',
-                'COTO': 'COTO: Coto',
-                'ESOFF': 'ESÔF: Esôfago',
+                'COTO': 'Coto: Coto',
+                'ESOFF': 'Esofago: Esôfago',
                 'GASTRICA': 'GA: Gastrica',
-                'G/POLIPO': 'POL/GASTRICA: Pólipo e Biópsia Gástrica',
-                'POLIPO': 'POLG: Pólipo Gástrico',
+                'G/POLIPO': 'POL/GASTRICA: Pólipo e biópsia gástrica',
+                'POLIPO': 'Pólipo: Pólipo',
                 'ICR': 'ICR: Íleo/Cólon/Reto',
+                'DUO': 'Duodeno: Duodeno',
+                'ULCERA': 'UG: Úlcera Gastrica',
             }
-            mascaras_sem_regiao = ['B/COLON', 'P/COLON', 'ULCERA', 'DUO']
+            mascaras_sem_regiao = ['B/COLON', 'P/COLON']
 
             mascara_upper = mascara.upper().replace('Ó', 'O').replace('Ô', 'O')
             mascara_map = {k.upper().replace('Ó', 'O').replace('Ô', 'O'): v for k, v in mascara_regiao.items()}
@@ -679,7 +681,7 @@ class MacroGastricaModule(BaseModule):
             
             log_message(f"📝 Máscara '{mascara}' → Região '{regiao_valor}'", "INFO")
 
-            # Verificar se já existe um campo de região preenchido
+            # Verificar se já existe um campo de região preenchido com o valor correto
             try:
                 inputs_regiao = driver.find_elements(By.XPATH, "//input[contains(@name, 'regiao_')]")
                 for input_reg in inputs_regiao:
@@ -687,44 +689,26 @@ class MacroGastricaModule(BaseModule):
                     if valor_atual == regiao_valor:
                         log_message(f"✅ Região já está definida como '{regiao_valor}' - pulando", "SUCCESS")
                         return
-                    elif valor_atual:
+                    elif valor_atual and valor_atual != regiao_valor:
                         log_message(f"⚠️ Região atual é '{valor_atual}', precisa mudar para '{regiao_valor}'", "WARNING")
+                        break
             except:
                 pass
 
-            # Procurar especificamente pelos campos de região na tabela de fragmentos
+            # Procurar e clicar no campo de região para editá-lo
             script = """
             // Procurar especificamente por campos de região na tabela de fragmentos
             var tbody = document.getElementById('tdRegiao');
             if (tbody) {
                 var inputs = tbody.querySelectorAll('input[name*="regiao_"]');
-                console.log('Encontrados', inputs.length, 'inputs de região');
                 for (var i = 0; i < inputs.length; i++) {
                     var input = inputs[i];
                     var parentTd = input.closest('td');
                     if (parentTd) {
                         var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                        console.log('Âncora encontrada:', ancora ? ancora.textContent : 'null');
                         if (ancora && ancora.offsetParent !== null) {
-                            // Verificar se está vazio ou pode ser preenchido
-                            if (ancora.textContent.includes('Vazio') || input.value === '') {
-                                return {element: ancora, input: input};
-                            }
+                            return {element: ancora, input: input};
                         }
-                    }
-                }
-            }
-            
-            // Fallback: procurar qualquer campo de região
-            var todosInputs = document.querySelectorAll('input[name*="regiao_"]');
-            console.log('Fallback: encontrados', todosInputs.length, 'inputs de região');
-            for (var i = 0; i < todosInputs.length; i++) {
-                var input = todosInputs[i];
-                var parentTd = input.closest('td');
-                if (parentTd) {
-                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                    if (ancora && ancora.offsetParent !== null) {
-                        return {element: ancora, input: input};
                     }
                 }
             }
@@ -736,32 +720,30 @@ class MacroGastricaModule(BaseModule):
                 campo_regiao = resultado_regiao['element']
                 input_regiao = resultado_regiao['input']
                 
-                # Verificar valor atual do input
-                valor_atual = input_regiao.get_attribute("value")
-                if valor_atual == regiao_valor:
-                    log_message(f"✅ Região já está definida como '{regiao_valor}' - pulando", "SUCCESS")
-                    return
-                
-                # Clicar via JavaScript
+                # Clicar na âncora para abrir o campo de edição
                 driver.execute_script("arguments[0].click();", campo_regiao)
-                log_message("🔍 Clicou no campo de região via JS", "INFO")
+                log_message("🔍 Clicou no campo de região para editar", "INFO")
                 time.sleep(0.5)
 
-                # Preencher via JavaScript
+                # Aguardar o input ficar visível e preencher
                 try:
-                    # Aguardar um pouco para o campo ficar ativo
-                    time.sleep(0.5)
+                    # Aguardar o input aparecer
+                    wait.until(lambda d: input_regiao.is_displayed() or input_regiao.get_attribute("style") != "display: none;")
                     
-                    # Preencher via JavaScript
+                    # Limpar e preencher o campo
                     driver.execute_script("""
+                        arguments[0].value = '';
                         arguments[0].value = arguments[1];
                         arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
                         arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-                        arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));
                     """, input_regiao, regiao_valor)
                     
                     log_message(f"✍️ Definiu região como '{regiao_valor}' via JS", "SUCCESS")
-                    time.sleep(1)
+                    time.sleep(0.5)
+                    
+                    # Clicar fora para confirmar a edição
+                    driver.execute_script("document.body.click();")
+                    time.sleep(0.5)
                     
                     # Verificar se o valor foi realmente definido
                     valor_definido = input_regiao.get_attribute("value")
@@ -785,7 +767,10 @@ class MacroGastricaModule(BaseModule):
                 log_message("⚠️ Campo D está vazio, não definindo quantidade", "WARNING")
                 return
 
-            # Procurar especificamente pelos campos de quantidade na tabela de fragmentos
+            quantidade_valor = campo_d.strip()
+            log_message(f"📝 Definindo quantidade de fragmentos como: {quantidade_valor}", "INFO")
+
+            # Procurar pelos campos de quantidade na tabela de fragmentos
             script = """
             // Procurar especificamente por campos de quantidade na tabela de fragmentos
             var tbody = document.getElementById('tdRegiao');
@@ -796,49 +781,60 @@ class MacroGastricaModule(BaseModule):
                     var parentTd = input.closest('td');
                     if (parentTd) {
                         var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                        if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
-                            return ancora;
+                        if (ancora && ancora.offsetParent !== null) {
+                            return {element: ancora, input: input};
                         }
-                    }
-                }
-            }
-            
-            // Fallback: procurar qualquer campo de quantidade que contenha "Vazio"
-            var todosInputs = document.querySelectorAll('input[name*="quantidade_"]');
-            for (var i = 0; i < todosInputs.length; i++) {
-                var input = todosInputs[i];
-                var parentTd = input.closest('td');
-                if (parentTd) {
-                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                    if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
-                        return ancora;
                     }
                 }
             }
             return null;
             """
-            campo_quantidade = driver.execute_script(script)
+            resultado_quantidade = driver.execute_script(script)
             
-            if campo_quantidade:
+            if resultado_quantidade:
+                campo_quantidade = resultado_quantidade['element']
+                input_quantidade = resultado_quantidade['input']
+                
+                # Verificar se já tem o valor correto
+                valor_atual = input_quantidade.get_attribute("value")
+                if valor_atual == quantidade_valor:
+                    log_message(f"✅ Quantidade já está definida como '{quantidade_valor}' - pulando", "SUCCESS")
+                    return
+                
                 # Clicar na âncora para abrir o campo
                 driver.execute_script("arguments[0].click();", campo_quantidade)
-                log_message("🔍 Clicou no campo de quantidade via JS", "INFO")
+                log_message("🔍 Clicou no campo de quantidade para editar", "INFO")
                 time.sleep(0.5)
 
-                # Aguardar o input aparecer e preencher via JavaScript
-                input_quantidade = wait.until(
-                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidade_') and @style='display: none;']"))
-                )
-                
-                # Preencher via JavaScript
-                driver.execute_script("""
-                    arguments[0].value = arguments[1];
-                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-                """, input_quantidade, campo_d.strip())
-                
-                log_message(f"✍️ Definiu quantidade como '{campo_d.strip()}' via JS", "SUCCESS")
-                time.sleep(0.3)
+                # Aguardar o input ficar visível e preencher
+                try:
+                    # Aguardar o input aparecer
+                    wait.until(lambda d: input_quantidade.is_displayed() or input_quantidade.get_attribute("style") != "display: none;")
+                    
+                    # Limpar e preencher o campo
+                    driver.execute_script("""
+                        arguments[0].value = '';
+                        arguments[0].value = arguments[1];
+                        arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                    """, input_quantidade, quantidade_valor)
+                    
+                    log_message(f"✍️ Definiu quantidade como '{quantidade_valor}' via JS", "SUCCESS")
+                    time.sleep(0.5)
+                    
+                    # Clicar fora para confirmar a edição
+                    driver.execute_script("document.body.click();")
+                    time.sleep(0.3)
+                    
+                    # Verificar se o valor foi definido
+                    valor_definido = input_quantidade.get_attribute("value")
+                    if valor_definido == quantidade_valor:
+                        log_message(f"✅ Valor de quantidade confirmado: '{valor_definido}'", "SUCCESS")
+                    else:
+                        log_message(f"⚠️ Valor não foi definido corretamente. Esperado: '{quantidade_valor}', Atual: '{valor_definido}'", "WARNING")
+                        
+                except Exception as input_error:
+                    log_message(f"⚠️ Erro ao preencher input de quantidade: {input_error}", "WARNING")
             else:
                 log_message("⚠️ Campo de quantidade não encontrado ou não visível", "WARNING")
 
@@ -848,7 +844,9 @@ class MacroGastricaModule(BaseModule):
     def definir_quantidade_blocos(self, driver, wait):
         """Define a quantidade de blocos usando JavaScript melhorado"""
         try:
-            # Procurar especificamente pelos campos de quantidade de blocos na tabela de fragmentos
+            log_message("📝 Definindo quantidade de blocos como: 1", "INFO")
+            
+            # Procurar pelos campos de quantidade de blocos na tabela de fragmentos
             script = """
             // Procurar especificamente por campos de quantidade de blocos na tabela de fragmentos
             var tbody = document.getElementById('tdRegiao');
@@ -859,54 +857,109 @@ class MacroGastricaModule(BaseModule):
                     var parentTd = input.closest('td');
                     if (parentTd) {
                         var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                        if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
-                            return ancora;
+                        if (ancora && ancora.offsetParent !== null) {
+                            return {element: ancora, input: input};
                         }
-                    }
-                }
-            }
-            
-            // Fallback: procurar qualquer campo de quantidade de blocos que contenha "Vazio"
-            var todosInputs = document.querySelectorAll('input[name*="quantidadeBlocos_"]');
-            for (var i = 0; i < todosInputs.length; i++) {
-                var input = todosInputs[i];
-                var parentTd = input.closest('td');
-                if (parentTd) {
-                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                    if (ancora && ancora.offsetParent !== null && ancora.textContent.includes('Vazio')) {
-                        return ancora;
                     }
                 }
             }
             return null;
             """
-            campo_blocos = driver.execute_script(script)
+            resultado_blocos = driver.execute_script(script)
             
-            if campo_blocos:
+            if resultado_blocos:
+                campo_blocos = resultado_blocos['element']
+                input_blocos = resultado_blocos['input']
+                
+                # Verificar se já tem o valor correto
+                valor_atual = input_blocos.get_attribute("value")
+                if valor_atual == "1":
+                    log_message("✅ Quantidade de blocos já está definida como '1' - pulando", "SUCCESS")
+                    return
+                
                 # Clicar na âncora para abrir o campo
                 driver.execute_script("arguments[0].click();", campo_blocos)
-                log_message("🔍 Clicou no campo de quantidade de blocos via JS", "INFO")
+                log_message("🔍 Clicou no campo de quantidade de blocos para editar", "INFO")
                 time.sleep(0.5)
 
-                # Aguardar o input aparecer e preencher via JavaScript
-                input_blocos = wait.until(
-                    EC.presence_of_element_located((By.XPATH, "//input[contains(@name, 'quantidadeBlocos_') and @style='display: none;']"))
-                )
-                
-                # Preencher via JavaScript
-                driver.execute_script("""
-                    arguments[0].value = '1';
-                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-                """, input_blocos)
-                
-                log_message("✍️ Definiu quantidade de blocos como '1' via JS", "SUCCESS")
-                time.sleep(0.3)
+                # Aguardar o input ficar visível e preencher
+                try:
+                    # Aguardar o input aparecer
+                    wait.until(lambda d: input_blocos.is_displayed() or input_blocos.get_attribute("style") != "display: none;")
+                    
+                    # Limpar e preencher o campo
+                    driver.execute_script("""
+                        arguments[0].value = '';
+                        arguments[0].value = '1';
+                        arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                    """, input_blocos)
+                    
+                    log_message("✍️ Definiu quantidade de blocos como '1' via JS", "SUCCESS")
+                    time.sleep(0.5)
+                    
+                    # Clicar fora para confirmar a edição
+                    driver.execute_script("document.body.click();")
+                    time.sleep(0.3)
+                    
+                    # Verificar se o valor foi definido
+                    valor_definido = input_blocos.get_attribute("value")
+                    if valor_definido == "1":
+                        log_message("✅ Valor de quantidade de blocos confirmado: '1'", "SUCCESS")
+                    else:
+                        log_message(f"⚠️ Valor não foi definido corretamente. Esperado: '1', Atual: '{valor_definido}'", "WARNING")
+                        
+                except Exception as input_error:
+                    log_message(f"⚠️ Erro ao preencher input de quantidade de blocos: {input_error}", "WARNING")
             else:
                 log_message("⚠️ Campo de quantidade de blocos não encontrado ou não visível", "WARNING")
 
         except Exception as e:
             log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
+
+    def definir_descricao_auxiliar(self, driver, wait):
+        """Define uma descrição auxiliar padrão se necessário"""
+        try:
+            log_message("📝 Verificando descrição auxiliar", "INFO")
+            
+            # Procurar pelos campos de descrição auxiliar na tabela de fragmentos
+            script = """
+            // Procurar especificamente por campos de descrição auxiliar na tabela de fragmentos
+            var tbody = document.getElementById('tdRegiao');
+            if (tbody) {
+                var inputs = tbody.querySelectorAll('input[name*="descricaoAuxiliar_"]');
+                for (var i = 0; i < inputs.length; i++) {
+                    var input = inputs[i];
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        if (ancora && ancora.offsetParent !== null) {
+                            return {element: ancora, input: input, text: ancora.textContent};
+                        }
+                    }
+                }
+            }
+            return null;
+            """
+            resultado_descricao = driver.execute_script(script)
+            
+            if resultado_descricao:
+                campo_descricao = resultado_descricao['element']
+                input_descricao = resultado_descricao['input']
+                texto_atual = resultado_descricao['text']
+                
+                # Se já tem uma descrição (não é "Vazio"), manter
+                if texto_atual and texto_atual.strip() != "Vazio":
+                    log_message(f"✅ Descrição auxiliar já preenchida: '{texto_atual}' - mantendo", "SUCCESS")
+                    return
+                
+                # Se está vazio, pode deixar vazio mesmo (é opcional)
+                log_message("✅ Descrição auxiliar está vazia - mantendo vazio (opcional)", "SUCCESS")
+            else:
+                log_message("⚠️ Campo de descrição auxiliar não encontrado", "WARNING")
+
+        except Exception as e:
+            log_message(f"⚠️ Erro ao verificar descrição auxiliar: {e}", "WARNING")
 
     def salvar_fragmentos(self, driver, wait):
         """Clica no botão Salvar dos fragmentos"""
@@ -995,6 +1048,32 @@ class MacroGastricaModule(BaseModule):
                 log_message("⚠️ Erro ao verificar elementos interativos", "WARNING")
                 return
             
+            # Debug: mostrar estado atual da tabela
+            try:
+                debug_script = """
+                var tbody = document.getElementById('tdRegiao');
+                if (tbody) {
+                    var inputs = tbody.querySelectorAll('input[name*="_"]');
+                    var result = [];
+                    for (var i = 0; i < inputs.length; i++) {
+                        var input = inputs[i];
+                        result.push({
+                            name: input.name,
+                            value: input.value,
+                            type: input.type
+                        });
+                    }
+                    return result;
+                }
+                return [];
+                """
+                campos_debug = driver.execute_script(debug_script)
+                log_message(f"🔍 DEBUG - Campos na tabela: {len(campos_debug)}", "INFO")
+                for campo in campos_debug:
+                    log_message(f"  - {campo['name']}: '{campo['value']}'", "INFO")
+            except Exception as debug_error:
+                log_message(f"⚠️ Erro no debug da tabela: {debug_error}", "WARNING")
+            
             # 1. Definir grupo baseado na máscara - SEMPRE EXECUTAR
             log_message(f"📝 Definindo grupo para máscara: {mascara}", "INFO")
             try:
@@ -1031,6 +1110,13 @@ class MacroGastricaModule(BaseModule):
                 self.aguardar_pagina_estavel(driver, wait, timeout=3)
             except Exception as e:
                 log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
+            
+            # 6. Verificar descrição auxiliar (opcional)
+            try:
+                self.definir_descricao_auxiliar(driver, wait)
+                self.aguardar_pagina_estavel(driver, wait, timeout=2)
+            except Exception as e:
+                log_message(f"⚠️ Erro ao verificar descrição auxiliar: {e}", "WARNING")
             
             log_message("✅ Campos pré-envio preenchidos com sucesso!", "SUCCESS")
             
