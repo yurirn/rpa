@@ -219,7 +219,7 @@ class MacroscopiaModule(BaseModule):
             else:
                 Select(select_elem).select_by_value(value)
             log_message(f"✅ Citotécnica selecionada (value: {value})", "SUCCESS")
-            time.sleep(SHORT_DELAY)
+            time.sleep(MEDIUM_DELAY)
         except Exception as e:
             log_message(f"Erro ao selecionar citotécnica: {e}", "ERROR")
             raise
@@ -256,11 +256,40 @@ class MacroscopiaModule(BaseModule):
 
     def fechar_exame(self, driver, wait):
         try:
-            botao_fechar = self.aguardar_elemento_clicavel(wait, By.ID, "fecharExameBarraFerramenta")
-            self.clicar_elemento(driver, botao_fechar)
+            botao_fechar = wait.until(EC.element_to_be_clickable((By.ID, "fecharExameBarraFerramenta")))
+            botao_fechar.click()
             log_message("📁 Exame fechado", "INFO")
         except Exception as e:
             log_message(f"Erro ao fechar exame: {e}", "ERROR")
+
+    def mostrar_resumo_final(self, resultados):
+        """Mostra o resumo final do processamento"""
+        total = len(resultados)
+        sucesso = len([r for r in resultados if r['status'] == 'sucesso'])
+        sem_andamento = len([r for r in resultados if r['status'] == 'sem_andamento'])
+        erros = len([r for r in resultados if 'erro' in r['status']])
+
+        log_message("\n" + "="*50, "INFO")
+        log_message("RESUMO FINAL DO PROCESSAMENTO", "INFO")
+        log_message("="*50, "INFO")
+        log_message(f"Total de exames: {total}", "INFO")
+        log_message(f"✅ Processados com sucesso: {sucesso}", "SUCCESS")
+        log_message(f"⚠️ Exames não encontrados: {sem_andamento}", "WARNING")
+        log_message(f"❌ Erros de processamento: {erros}", "ERROR")
+
+        # Mostrar detalhes dos erros se houver
+        if erros > 0:
+            log_message("\nDetalhes dos erros:", "ERROR")
+            for r in resultados:
+                if 'erro' in r['status']:
+                    log_message(f"- {r['codigo']}: {r['detalhes']}", "ERROR")
+
+        messagebox.showinfo("Processamento Concluído",
+            f"✅ Processamento finalizado!\n\n"
+            f"Total: {total}\n"
+            f"Sucesso: {sucesso}\n"
+            f"Não encontrados: {sem_andamento}\n"
+            f"Erros: {erros}")
 
     def run(self, params: dict):
         username = params.get("username")
@@ -345,6 +374,7 @@ class MacroscopiaModule(BaseModule):
                     driver.quit()
                 except Exception:
                     pass
+            self.mostrar_resumo_final(resultados)
 
 def run(params: dict):
     module = MacroscopiaModule()
