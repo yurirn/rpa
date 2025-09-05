@@ -1,12 +1,13 @@
 import os
 import time
 import pandas as pd
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from dotenv import load_dotenv
+from datetime import datetime
 
 from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
@@ -18,11 +19,15 @@ class GuiaUnimedModule(BaseModule):
     def __init__(self):
         super().__init__(nome="Guia Unimed")
 
-    def get_unique_exames(self, file_path: str) -> list:
+    def get_unique_guias(self, file_path: str) -> list:
         try:
-            df = pd.read_excel(file_path)
-            unique_exames = df['Exame'].dropna().unique().tolist()
-            return unique_exames
+            # Ler a primeira coluna (coluna A) do Excel, onde a primeira linha é o cabeçalho "GUIA"
+            df = pd.read_excel(file_path, header=0)
+            # Pegar a primeira coluna, ignorando a primeira linha (cabeçalho)
+            guias = df.iloc[:, 0].dropna().tolist()
+            if guias and guias[0].upper() == "GUIA":
+                guias = guias[1:]  # Remove o cabeçalho se for "GUIA"
+            return guias
         except Exception as e:
             raise ValueError(f"Erro ao ler o Excel: {e}")
 
@@ -36,22 +41,29 @@ class GuiaUnimedModule(BaseModule):
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
         driver = BrowserFactory.create_chrome(headless=headless_mode)
         wait = WebDriverWait(driver, 15)
+        # Criar um wait mais longo para operações que podem demorar mais
+        wait_long = WebDriverWait(driver, 30)
 
         try:
             log_message("Iniciando automação de Guia Unimed...", "INFO")
 
-            # Carregar exames do Excel
+            # Carregar guias do Excel
             if not excel_file or not os.path.exists(excel_file):
                 messagebox.showerror("Erro", "Arquivo Excel não informado ou não encontrado.")
                 return
             try:
-                exames_unicos = self.get_unique_exames(excel_file)
+                guias = self.get_unique_guias(excel_file)
             except Exception as e:
                 messagebox.showerror("Erro", str(e))
                 return
-            if not exames_unicos:
-                messagebox.showerror("Erro", "Nenhum exame encontrado no arquivo.")
+            if not guias:
+                messagebox.showerror("Erro", "Nenhuma guia encontrada no arquivo.")
                 return
+            
+            log_message(f"✅ Carregadas {len(guias)} guias do Excel", "SUCCESS")
+            
+            # Criar DataFrame para armazenar resultados
+            resultados_df = pd.DataFrame(columns=["GUIA", "CARTAO", "MEDICO", "PROCEDIMENTOS", "QTD", "TEXTO"])
 
             # Login
             driver.get(url)
@@ -122,22 +134,451 @@ class GuiaUnimedModule(BaseModule):
 
             log_message("Tela de Pré Faturamento aberta.", "SUCCESS")
 
-            # Digitar cada exame no campo numeroExame
-            for exame in exames_unicos:
+            # Processar cada guia do Excel
+            resultados = []
+            for guia in guias:
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
                     break
                 try:
-                    log_message(f"➡️ Digitando exame: {exame}", "INFO")
+                    log_message(f"➡️ Processando guia: {guia}", "INFO")
+                    
+                    # Digitar o exame no campo numeroExame
                     campo_exame = wait.until(EC.presence_of_element_located((By.ID, "numeroExame")))
                     campo_exame.clear()
-                    campo_exame.send_keys(str(exame))
+                    campo_exame.send_keys(str(guia))
                     time.sleep(0.5)
+                    
+                    # Clicar no botão Pesquisar
+                    pesquisar_btn = wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento")))
+                    pesquisar_btn.click()
+                    log_message("Pesquisando exame...", "INFO")
+                    
+                    # Aguardar carregamento dos resultados com mais tempo
+                    try:
+                        # Primeiro aguardar o spinner aparecer (se existir)
+                        try:
+                            WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+                            log_message("🔄 Carregando resultados...", "INFO")
+                            wait_long.until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                        except Exception:
+                            # Se não encontrar o spinner, apenas aguarda um tempo fixo
+                            log_message("Aguardando carregamento dos resultados...", "INFO")
+                            time.sleep(5)
+                    except Exception:
+                        log_message("Tempo de carregamento excedido, verificando resultados mesmo assim...", "WARNING")
+                    
+                    # Aguardar mais um pouco para garantir que a tabela foi carregada
+                    time.sleep(3)
+                    
+                    # Verificar se há resultados usando diferentes seletores
+                    tbody_rows = []
+                    
+                    # Tentar diferentes abordagens para encontrar a tabela de resultados
+                    selectors = [
+                        "#tabelaPreFaturamentoTbody tr",
+                        ".table-responsive table tbody tr",
+                        "table.table-striped tbody tr",
+                        "table.footable tbody tr"
+                    ]
+                    
+                    for selector in selectors:
+                        try:
+                            tbody_rows = driver.find_elements(By.CSS_SELECTOR, selector)
+                            if len(tbody_rows) > 0:
+                                log_message(f"Tabela de resultados encontrada usando seletor: {selector}", "INFO")
+                                break
+                        except Exception:
+                            continue
+                    
+                    # Se ainda não encontrou resultados, tenta verificar se há mensagem de "nenhum resultado"
+                    if len(tbody_rows) == 0:
+                        try:
+                            # Verificar se há mensagem de "nenhum resultado"
+                            no_results_msg = driver.find_element(By.XPATH, "//*[contains(text(), 'Nenhum resultado encontrado')]")
+                            if no_results_msg:
+                                log_message(f"⚠️ Mensagem de 'Nenhum resultado encontrado' para {guia}", "WARNING")
+                        except Exception:
+                            # Se não encontrar a mensagem, aguarda mais um pouco e tenta novamente
+                            log_message("Aguardando mais tempo para carregamento completo...", "INFO")
+                            time.sleep(5)
+                            for selector in selectors:
+                                try:
+                                    tbody_rows = driver.find_elements(By.CSS_SELECTOR, selector)
+                                    if len(tbody_rows) > 0:
+                                        log_message(f"Tabela de resultados encontrada após espera adicional", "INFO")
+                                        break
+                                except Exception:
+                                    continue
+                    
+                    if len(tbody_rows) == 0:
+                        log_message(f"⚠️ Nenhum resultado encontrado para {guia}. Pulando.", "WARNING")
+                        resultados.append({"guia": guia, "status": "sem_resultados"})
+                        # Adicionar linha vazia no DataFrame
+                        resultados_df = pd.concat([resultados_df, pd.DataFrame([{
+                            "GUIA": guia,
+                            "CARTAO": "",
+                            "MEDICO": "",
+                            "PROCEDIMENTOS": "",
+                            "QTD": "",
+                            "TEXTO": ""
+                        }])], ignore_index=True)
+                        continue
+                    
+                    log_message(f"✅ Encontrados {len(tbody_rows)} resultados para a guia {guia}", "SUCCESS")
+                    
+                    # Processar primeira linha para obter dados básicos
+                    try:
+                        # Obter número do cartão do paciente da tabela
+                        cartao = ""
+                        try:
+                            # Índice pode variar dependendo da estrutura da tabela
+                            # Tentar diferentes índices para o cartão
+                            try:
+                                cartao = tbody_rows[0].find_elements(By.CSS_SELECTOR, "td")[6].text.strip()
+                            except:
+                                try:
+                                    # Tentar outro índice comum para o campo de cartão
+                                    cartao = tbody_rows[0].find_elements(By.CSS_SELECTOR, "td")[5].text.strip()
+                                except:
+                                    # Se ainda falhar, tentar localizar pela coluna "Carteira"
+                                    header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
+                                    cartao_index = -1
+                                    for i, cell in enumerate(header_cells):
+                                        if "carteira" in cell.text.lower():
+                                            cartao_index = i
+                                            break
+                                    
+                                    if cartao_index >= 0:
+                                        cartao = tbody_rows[0].find_elements(By.CSS_SELECTOR, "td")[cartao_index].text.strip()
+                            
+                            log_message(f"✅ Número do cartão obtido: {cartao}", "INFO")
+                        except Exception as e:
+                            log_message(f"⚠️ Erro ao obter número do cartão: {e}", "WARNING")
+                        
+                        # Obter procedimentos e quantidades de todas as linhas
+                        procedimentos = []
+                        quantidades = []
+                        for row in tbody_rows:
+                            try:
+                                # Tentar diferentes índices para o procedimento
+                                try:
+                                    procedimento = row.find_elements(By.CSS_SELECTOR, "td")[10].text.strip()
+                                except:
+                                    # Tentar localizar pela coluna "Procedimento"
+                                    header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
+                                    proc_index = -1
+                                    for i, cell in enumerate(header_cells):
+                                        if "procedimento" in cell.text.lower():
+                                            proc_index = i
+                                            break
+                                    
+                                    if proc_index >= 0:
+                                        procedimento = row.find_elements(By.CSS_SELECTOR, "td")[proc_index].text.strip()
+                                    else:
+                                        # Se ainda falhar, usar um índice alternativo
+                                        procedimento = row.find_elements(By.CSS_SELECTOR, "td")[9].text.strip()
+                                
+                                procedimentos.append(procedimento)
+                                
+                                # Obter quantidade do procedimento (próxima coluna após procedimento)
+                                try:
+                                    # Se procedimento está no índice 10, quantidade está no índice 11
+                                    cells = row.find_elements(By.CSS_SELECTOR, "td")
+                                    # Encontrar o índice do procedimento primeiro
+                                    proc_index = 10  # índice padrão do procedimento
+                                    try:
+                                        # Tentar encontrar índice do procedimento dinamicamente
+                                        header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
+                                        for i, cell in enumerate(header_cells):
+                                            if "procedimento" in cell.text.lower():
+                                                proc_index = i
+                                                break
+                                    except:
+                                        pass
+                                    
+                                    # QTD é a próxima coluna após procedimento
+                                    qtd_index = proc_index + 1
+                                    quantidade = cells[qtd_index].text.strip()
+                                except:
+                                    # Fallback: tentar localizar pela coluna "Qtd" diretamente
+                                    try:
+                                        header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
+                                        qtd_index = -1
+                                        for i, cell in enumerate(header_cells):
+                                            if "qtd" in cell.text.lower():
+                                                qtd_index = i
+                                                break
+                                        
+                                        if qtd_index >= 0:
+                                            quantidade = row.find_elements(By.CSS_SELECTOR, "td")[qtd_index].text.strip()
+                                        else:
+                                            quantidade = "1"  # Default para 1 se não encontrar
+                                    except:
+                                        quantidade = "1"  # Default para 1 se não encontrar
+                                
+                                quantidades.append(quantidade)
+                                
+                            except Exception as e:
+                                log_message(f"⚠️ Erro ao obter procedimento/quantidade: {e}", "WARNING")
+                                quantidades.append("1")  # Default para 1 em caso de erro
+                        
+                        procedimentos_str = ", ".join(procedimentos)
+                        quantidades_str = ", ".join(quantidades)
+                        log_message(f"✅ Procedimentos obtidos: {procedimentos_str}", "INFO")
+                        log_message(f"✅ Quantidades obtidas: {quantidades_str}", "INFO")
+                        
+                        # NOVO FLUXO: Marcar checkbox do primeiro exame e clicar no botão "Abrir exame"
+                        log_message("Marcando checkbox do primeiro exame...", "INFO")
+                        
+                        # Encontrar e marcar o checkbox do primeiro exame
+                        try:
+                            checkbox = tbody_rows[0].find_element(By.CSS_SELECTOR, "input[type='checkbox'][name='exameId']")
+                            if not checkbox.is_selected():
+                                checkbox.click()
+                                log_message("✅ Checkbox do exame marcado", "SUCCESS")
+                            else:
+                                log_message("ℹ️ Checkbox já estava marcado", "INFO")
+                            
+                            # Aguardar um pouco após marcar o checkbox
+                            time.sleep(1)
+                            
+                            # Procurar e clicar no botão "Abrir exame"
+                            log_message("Procurando botão 'Abrir exame'...", "INFO")
+                            
+                            try:
+                                # Procurar pelo botão "Abrir exame" usando o seletor específico
+                                abrir_btn = wait.until(EC.element_to_be_clickable((
+                                    By.CSS_SELECTOR, 
+                                    "a.btn.btn-sm.btn-primary.chamadaAjax.toogleInicial.setupAjax[data-url='/moduloFaturamento/abrirExameCorrecao']"
+                                )))
+                                log_message("✅ Botão 'Abrir exame' encontrado", "SUCCESS")
+                                
+                                # Clicar no botão
+                                abrir_btn.click()
+                                log_message("✅ Clique no botão 'Abrir exame' realizado", "SUCCESS")
+                                
+                                # Aguardar o modal aparecer
+                                log_message("Aguardando modal do exame abrir...", "INFO")
+                                time.sleep(3)
+                                
+                                # Verificar se o modal foi aberto
+                                try:
+                                    modal = wait.until(EC.presence_of_element_located((By.ID, "myModal")))
+                                    if modal.is_displayed():
+                                        log_message("✅ Modal do exame aberto com sucesso", "SUCCESS")
+                                    else:
+                                        log_message("⚠️ Modal encontrado mas não está visível", "WARNING")
+                                        time.sleep(2)  # Aguardar mais um pouco
+                                except Exception:
+                                    log_message("⚠️ Modal não encontrado, tentando continuar...", "WARNING")
+                                    time.sleep(2)
+                                
+                            except Exception as e:
+                                log_message(f"❌ Erro ao clicar no botão 'Abrir exame': {e}", "ERROR")
+                                raise Exception(f"Não foi possível abrir o exame: {e}")
+                                
+                        except Exception as e:
+                            log_message(f"❌ Erro ao marcar checkbox do exame: {e}", "ERROR")
+                            raise Exception(f"Não foi possível marcar o exame: {e}")
+                        
+                        # Extrair nome do médico do modal aberto
+                        medico = ""
+                        try:
+                            # Método 1: Usar JavaScript para extrair o valor do input (mais confiável)
+                            try:
+                                medico = driver.execute_script("return $('#medicoRequisitanteInput').val();")
+                                if medico and medico.strip():
+                                    medico = medico.strip()
+                                    log_message(f"✅ Médico requisitante encontrado (JavaScript): {medico}", "SUCCESS")
+                                else:
+                                    raise Exception("Valor vazio retornado pelo JavaScript")
+                            except Exception as e:
+                                log_message(f"Tentando método alternativo para médico: {e}", "INFO")
+                                
+                                # Método 2: Procurar diretamente pelo input, mesmo que esteja oculto
+                                try:
+                                    medico_input = driver.find_element(By.ID, "medicoRequisitanteInput")
+                                    medico = medico_input.get_attribute("value").strip()
+                                    if medico:
+                                        log_message(f"✅ Médico requisitante encontrado (input direto): {medico}", "SUCCESS")
+                                    else:
+                                        raise Exception("Input encontrado mas valor vazio")
+                                except Exception:
+                                    # Método 3: Procurar pelo elemento <a> com a classe "table-editable-ancora"
+                                    try:
+                                        medico_element = driver.find_element(By.CSS_SELECTOR, 
+                                            "a.table-editable-ancora.autocomplete.autocompleteSetup")
+                                        medico = medico_element.text.strip()
+                                        if medico:
+                                            log_message(f"✅ Médico requisitante encontrado (link ancora): {medico}", "SUCCESS")
+                                        else:
+                                            raise Exception("Link encontrado mas texto vazio")
+                                    except Exception:
+                                        # Método 4: Procurar qualquer elemento após "Médico requisitante"
+                                        try:
+                                            # Localizar o elemento td que contém "Médico requisitante"
+                                            medico_label = driver.find_element(By.XPATH, "//td[contains(text(), 'Médico requisitante')]")
+                                            # Pegar o elemento irmão (following-sibling)
+                                            medico_td = medico_label.find_element(By.XPATH, "following-sibling::td")
+                                            # Extrair o texto completo do elemento
+                                            medico = medico_td.text.strip()
+                                            if medico:
+                                                log_message(f"✅ Médico requisitante encontrado (texto do td): {medico}", "SUCCESS")
+                                            else:
+                                                raise Exception("TD encontrado mas texto vazio")
+                                        except Exception:
+                                            # Método 5: Usar JavaScript alternativo para procurar o elemento
+                                            try:
+                                                medico = driver.execute_script("""
+                                                    var input = document.getElementById('medicoRequisitanteInput');
+                                                    if (input && input.value) {
+                                                        return input.value;
+                                                    }
+                                                    var ancora = document.querySelector('a.table-editable-ancora.autocomplete.autocompleteSetup');
+                                                    if (ancora && ancora.textContent) {
+                                                        return ancora.textContent.trim();
+                                                    }
+                                                    return null;
+                                                """)
+                                                if medico and medico.strip():
+                                                    medico = medico.strip()
+                                                    log_message(f"✅ Médico requisitante encontrado (JavaScript alternativo): {medico}", "SUCCESS")
+                                                else:
+                                                    raise Exception("JavaScript alternativo não retornou resultado")
+                                            except Exception:
+                                                log_message("⚠️ Todos os métodos falharam para encontrar o médico", "WARNING")
+                            
+                            if not medico:
+                                log_message("⚠️ Não foi possível encontrar o médico requisitante", "WARNING")
+                        except Exception as e:
+                            log_message(f"⚠️ Erro ao obter médico requisitante: {e}", "WARNING")
+                        
+                        # Extrair texto clínico do modal
+                        texto = ""
+                        try:
+                            # Primeiro tentar localizar o iframe dentro do modal
+                            try:
+                                iframe = driver.find_element(By.CSS_SELECTOR, "#myModal .cke_wysiwyg_frame")
+                                driver.switch_to.frame(iframe)
+                                
+                                # Agora obter o texto do corpo do iframe
+                                texto_element = driver.find_element(By.CSS_SELECTOR, "body")
+                                texto = texto_element.text.strip()
+                                
+                                # Voltar ao contexto principal
+                                driver.switch_to.default_content()
+                            except:
+                                # Se não encontrar o iframe, tentar outros seletores para o texto clínico dentro do modal
+                                try:
+                                    texto_element = driver.find_element(
+                                        By.XPATH, 
+                                        "//div[@id='myModal']//*[contains(text(), 'Dados clínicos')]/following-sibling::*"
+                                    )
+                                    texto = texto_element.text.strip()
+                                except:
+                                    # Última tentativa - procurar por div ou textarea com conteúdo dentro do modal
+                                    elements = driver.find_elements(By.CSS_SELECTOR, "#myModal div.form-control, #myModal textarea.form-control")
+                                    for elem in elements:
+                                        if elem.text and len(elem.text) > 5:
+                                            texto = elem.text.strip()
+                                            break
+                            
+                            log_message(f"✅ Texto clínico obtido: {texto[:50]}...", "INFO")
+                        except Exception as e:
+                            log_message(f"⚠️ Erro ao obter texto clínico: {e}", "WARNING")
+                        
+                        # Fechar modal
+                        try:
+                            # Procurar botão de fechar modal
+                            close_btn = driver.find_element(By.CSS_SELECTOR, "#myModal .modal-header .close")
+                            close_btn.click()
+                            time.sleep(1)
+                            log_message("✅ Modal fechado", "INFO")
+                        except:
+                            # Tentar fechar com ESC
+                            try:
+                                from selenium.webdriver.common.keys import Keys
+                                driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                                time.sleep(1)
+                                log_message("✅ Modal fechado com ESC", "INFO")
+                            except:
+                                log_message("⚠️ Não foi possível fechar o modal", "WARNING")
+                        
+                        # Adicionar dados ao DataFrame
+                        resultados_df = pd.concat([resultados_df, pd.DataFrame([{
+                            "GUIA": guia,
+                            "CARTAO": cartao,
+                            "MEDICO": medico,
+                            "PROCEDIMENTOS": procedimentos_str,
+                            "QTD": quantidades_str,
+                            "TEXTO": texto
+                        }])], ignore_index=True)
+                        
+                        resultados.append({"guia": guia, "status": "sucesso"})
+                        log_message(f"✅ Guia {guia} processada com sucesso", "SUCCESS")
+                        
+                    except Exception as e:
+                        log_message(f"❌ Erro ao processar detalhes da guia {guia}: {e}", "ERROR")
+                        resultados.append({"guia": guia, "status": "erro_detalhes", "erro": str(e)})
+                        
+                        # Adicionar linha com dados parciais no DataFrame
+                        resultados_df = pd.concat([resultados_df, pd.DataFrame([{
+                            "GUIA": guia,
+                            "CARTAO": cartao if 'cartao' in locals() else "",
+                            "MEDICO": "",
+                            "PROCEDIMENTOS": procedimentos_str if 'procedimentos_str' in locals() else "",
+                            "QTD": quantidades_str if 'quantidades_str' in locals() else "",
+                            "TEXTO": ""
+                        }])], ignore_index=True)
+                    
                 except Exception as e:
-                    log_message(f"❌ Erro ao preencher exame {exame}: {e}", "ERROR")
-                    continue
+                    resultados.append({"guia": guia, "status": "erro", "erro": str(e)})
+                    log_message(f"❌ Erro ao processar guia {guia}: {e}", "ERROR")
+                    
+                    # Adicionar linha vazia no DataFrame para a guia com erro
+                    resultados_df = pd.concat([resultados_df, pd.DataFrame([{
+                        "GUIA": guia,
+                        "CARTAO": "",
+                        "MEDICO": "",
+                        "PROCEDIMENTOS": "",
+                        "QTD": "",
+                        "TEXTO": ""
+                    }])], ignore_index=True)
 
-            log_message("Preenchimento dos exames concluído.", "SUCCESS")
+            # Salvar resultados em Excel
+            try:
+                # Gerar nome do arquivo com timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_dir = os.path.dirname(excel_file)
+                output_file = os.path.join(output_dir, f"resultados_guias_unimed_{timestamp}.xlsx")
+                
+                # Salvar DataFrame para Excel
+                resultados_df.to_excel(output_file, index=False)
+                log_message(f"✅ Resultados salvos em: {output_file}", "SUCCESS")
+            except Exception as e:
+                log_message(f"❌ Erro ao salvar arquivo de resultados: {e}", "ERROR")
+
+            # Resumo final
+            total = len(resultados)
+            sucesso = [r for r in resultados if r["status"] == "sucesso"]
+            erro = [r for r in resultados if r["status"] in ["erro", "erro_detalhes", "erro_link"]]
+            sem_resultados = [r for r in resultados if r["status"] == "sem_resultados"]
+            
+            log_message("\nResumo do processamento:", "INFO")
+            log_message(f"Total de guias: {total}", "INFO")
+            log_message(f"Processadas com sucesso: {len(sucesso)}", "SUCCESS")
+            log_message(f"Sem resultados: {len(sem_resultados)}", "WARNING")
+            log_message(f"Erros: {len(erro)}", "ERROR")
+            
+            messagebox.showinfo("Sucesso",
+                f"✅ Processamento finalizado!\n"
+                f"Total: {total}\n"
+                f"Sucesso: {len(sucesso)}\n"
+                f"Sem resultados: {len(sem_resultados)}\n"
+                f"Erros: {len(erro)}\n\n"
+                f"Resultados salvos em:\n{output_file if 'output_file' in locals() else 'Erro ao salvar arquivo'}"
+            )
 
         except Exception as e:
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
