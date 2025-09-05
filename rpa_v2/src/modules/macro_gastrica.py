@@ -196,7 +196,8 @@ class MacroGastricaModule(BaseModule):
             'HELEN': 'Helen Oliveira dos Santos',
             'CLARA': 'Clara Helena Janz Garcia de Souza',
             'PALOMA': 'Paloma Brenda Silva De Oliveira',
-            'ELLEN': 'Ellen Andressa de Alvarenga'
+            'ELLEN': 'Ellen Andressa de Alvarenga',
+            'VITORIA': 'Vitoria Aquino Nairne Domingues'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(

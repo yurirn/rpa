@@ -213,7 +213,7 @@ class MainWindow:
         return "📋 Busca pelo numero da guia."
 
     def select_excel_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+        file_path = filedialog.askopenfilename(filetypes=[["Excel files", "*.xlsx"]])
         if file_path:
             self.excel_file_path.set(file_path)
 
@@ -268,6 +268,11 @@ class MainWindow:
         return True
 
     def on_module_selected(self, event=None):
+        # Recarrega módulos do arquivo para refletir alterações recentes (ex.: requires_excel)
+        self.modules = self.load_modules()
+        self.module_id_map = {m['id']: m for m in self.modules}
+        self.module_name_map = {m['name']: m for m in self.modules}
+
         # Buscar pelo nome selecionado e obter o id
         selected_name = self.module_combo.get()
         module = self.module_name_map.get(selected_name)
@@ -320,7 +325,7 @@ class MainWindow:
             })
         def run_in_thread():
             try:
-                mod = importlib.import_module(module["module_path"])
+                mod = importlib.import_module(module["module_path"]) 
                 if hasattr(mod, "run"):
                     mod.run(params)
             except Exception as e:

@@ -58,5 +58,15 @@
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
     "requires_unimed_credentials": false
+  },
+  {
+    "id": "guia_unimed",
+    "name": "Guia Unimed",
+    "description": "Automatiza o processo de guias da Unimed",
+    "module_path": "modules.guia_unimed",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   }
 ]
