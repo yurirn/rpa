@@ -90,7 +90,7 @@ class MacroscopiaModule(BaseModule):
 
                     # Se não tem máscara, usa a última válida
                     if mascara is not None and str(mascara).strip():
-                        mascara = str(mascara).strip()
+                        mascara = str(mascara).strip().upper()  # Sempre maiúsculo
                         ultima_mascara = mascara
                     else:
                         mascara = ultima_mascara
@@ -183,36 +183,30 @@ class MacroscopiaModule(BaseModule):
             raise
 
     def selecionar_citotecnica(self, driver, wait, citotecnica_nome):
-        """Seleciona a citotécnica pelo nome (do Excel), convertendo para value via dicionário fixo e selecionando pelo value."""
+        """Seleciona a citotécnica pelo primeiro nome (do Excel), convertendo para value via dicionário fixo e selecionando pelo value."""
         try:
             select_elem = self.aguardar_elemento(wait, By.ID, "citotecnico")
             time.sleep(1)  # Garante que o select foi populado (caso seja AJAX)
-            # Dicionário fixo de nome para value
-            nome_para_value = {
-                "adriana domiciano fialho": "105789",
-                "andrea clementino romero da costa staevie": "105788",
-                "administrador do sistema": "514",
-                "annai luka vitorino losnak": "519",
-                "suporte adrienne intersistemas": "226754",
-                "suporte dani intersistemas": "247216",
-                "suporte deni intersistemas": "247215",
-                "suporte erika intersistemas": "226755",
-                "suporte flavia intersistemas": "226759",
-                "suporte ingrid intersistemas": "338762",
-                "suporte intersistemas": "513",
-                "suporte intersistemas (2)": "226760",
-                "suporte jose intersistemas": "339195",
-                "suporte pedro intersistemas": "226756",
-                "suporte priscila intersistemas": "226758",
+            # Dicionário fixo de primeiro nome para value
+            primeiro_nome_para_value = {
+                "adriana": "105789",
+                "andrea": "105788",
+                # Adicione outros nomes e values conforme necessário
             }
-            nome_normalizado = self.normalizar_nome(citotecnica_nome)
-            value = nome_para_value.get(nome_normalizado)
+            if not citotecnica_nome:
+                log_message(f"❌ Citotécnica não informada.", "ERROR")
+                return
+            # Extrai o primeiro nome, normaliza
+            primeiro_nome = str(citotecnica_nome).strip().split()[0].lower()
+            primeiro_nome = unicodedata.normalize('NFKD', primeiro_nome)
+            primeiro_nome = ''.join([c for c in primeiro_nome if not unicodedata.combining(c)])
+            value = primeiro_nome_para_value.get(primeiro_nome)
             if not value:
                 # Salva o HTML do select para debug
                 html = select_elem.get_attribute("outerHTML")
                 with open("debug_citotecnico_select.html", "w", encoding="utf-8") as f:
                     f.write(html)
-                log_message(f"❌ Citotécnica '{citotecnica_nome}' não encontrada no dicionário. HTML salvo em debug_citotecnico_select.html", "ERROR")
+                log_message(f"❌ Citotécnica '{citotecnica_nome}' (primeiro nome: '{primeiro_nome}') não encontrada no dicionário. HTML salvo em debug_citotecnico_select.html", "ERROR")
                 return
             if not select_elem.is_displayed():
                 driver.execute_script(f"$(arguments[0]).val('{value}').trigger('change');", select_elem)
@@ -366,6 +360,8 @@ class MacroscopiaModule(BaseModule):
                     'status': resultado['status'],
                     'detalhes': resultado.get('detalhes', '')
                 })
+
+            self.mostrar_resumo_final(resultados)
         except Exception as e:
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
         finally:
@@ -374,7 +370,6 @@ class MacroscopiaModule(BaseModule):
                     driver.quit()
                 except Exception:
                     pass
-            self.mostrar_resumo_final(resultados)
 
 def run(params: dict):
     module = MacroscopiaModule()
