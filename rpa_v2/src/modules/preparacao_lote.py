@@ -58,20 +58,113 @@ class PreparacaoLoteModule(BaseModule):
         unimed_user = params.get("unimed_user")
         unimed_pass = params.get("unimed_pass")
         pasta_download = params.get("pasta_download", os.path.join(os.getcwd(), "xml"))
+
+        # Verificar se o Excel tem múltiplas abas
+        try:
+            abas_excel = pd.ExcelFile(excel_file).sheet_names
+            log_message(f"Excel possui {len(abas_excel)} aba(s): {abas_excel}", "INFO")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
+            return
+
+        # Se tem múltiplas abas, processar cada uma separadamente
+        if len(abas_excel) > 1:
+            log_message("Detectado Excel com múltiplas abas. Processando cada aba separadamente...", "INFO")
+
+            for idx, aba in enumerate(abas_excel, 1):
+                if cancel_flag and cancel_flag.is_set():
+                    log_message("Execução cancelada pelo usuário.", "WARNING")
+                    return
+
+                log_message(f"🔄 Processando aba {idx}/{len(abas_excel)}: {aba}", "INFO")
+
+                # Processar esta aba específica
+                sucesso_aba = self._processar_aba_especifica(
+                    excel_file, aba, username, password, modo_busca,
+                    cancel_flag, gera_xml_tiss, headless_mode,
+                    unimed_user, unimed_pass, pasta_download, idx, len(abas_excel)
+                )
+
+                if not sucesso_aba:
+                    log_message(f"❌ Erro ao processar aba {aba}", "ERROR")
+                    break
+                else:
+                    log_message(f"✅ Aba {aba} processada com sucesso", "SUCCESS")
+
+            log_message("🎉 Processamento de todas as abas concluído!", "SUCCESS")
+        else:
+            # Processar Excel com uma única aba (comportamento original)
+            log_message("Excel com aba única. Processando normalmente...", "INFO")
+            self._processar_aba_unica(
+                excel_file, username, password, modo_busca,
+                cancel_flag, gera_xml_tiss, headless_mode,
+                unimed_user, unimed_pass, pasta_download
+            )
+
+    def _processar_aba_especifica(self, excel_file, nome_aba, username, password, modo_busca,
+                                 cancel_flag, gera_xml_tiss, headless_mode,
+                                 unimed_user, unimed_pass, pasta_download, idx_aba, total_abas):
+        """Processa uma aba específica do Excel"""
+        try:
+            # Obter exames únicos desta aba
+            if modo_busca == "exame":
+                df = pd.read_excel(excel_file, sheet_name=nome_aba)
+                exames_unicos = df['Exame'].dropna().unique().tolist()
+            elif modo_busca == "guia":
+                df = pd.read_excel(excel_file, sheet_name=nome_aba, header=None)
+                exames_unicos = df.iloc[:, 0].dropna().unique().tolist()
+            else:
+                raise ValueError("Modo de busca inválido. Use 'exame' ou 'guia'.")
+
+            if not exames_unicos:
+                log_message(f"⚠️ Nenhum exame encontrado na aba {nome_aba}", "WARNING")
+                return True  # Continua para próxima aba
+
+            log_message(f"📊 Aba {nome_aba}: {len(exames_unicos)} exames encontrados", "INFO")
+
+            # Executar processo completo para esta aba
+            return self._executar_automacao_completa(
+                exames_unicos, username, password, modo_busca,
+                cancel_flag, gera_xml_tiss, headless_mode,
+                unimed_user, unimed_pass, pasta_download,
+                f"Aba {idx_aba}/{total_abas} - {nome_aba}"
+            )
+
+        except Exception as e:
+            log_message(f"❌ Erro ao processar aba {nome_aba}: {e}", "ERROR")
+            return False
+
+    def _processar_aba_unica(self, excel_file, username, password, modo_busca,
+                           cancel_flag, gera_xml_tiss, headless_mode,
+                           unimed_user, unimed_pass, pasta_download):
+        """Processa Excel com aba única (comportamento original)"""
         try:
             exames_unicos = self.get_unique_exames(excel_file, modo_busca)
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
             return
+
         if not exames_unicos:
             messagebox.showerror("Erro", "Nenhum exame encontrado no arquivo.")
             return
+
+        self._executar_automacao_completa(
+            exames_unicos, username, password, modo_busca,
+            cancel_flag, gera_xml_tiss, headless_mode,
+            unimed_user, unimed_pass, pasta_download, "Processamento único"
+        )
+
+    def _executar_automacao_completa(self, exames_unicos, username, password, modo_busca,
+                                   cancel_flag, gera_xml_tiss, headless_mode,
+                                   unimed_user, unimed_pass, pasta_download, contexto):
+        """Executa o processo completo de automação para uma lista de exames"""
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
         driver = BrowserFactory.create_chrome(headless=headless_mode)
         wait = WebDriverWait(driver, 15)
         resultados = []
+
         try:
-            log_message("Iniciando automação de preparação de exames...", "INFO")
+            log_message(f"🚀 Iniciando automação: {contexto}...", "INFO")
             driver.get(url)
             wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
             driver.find_element(By.ID, "password").send_keys(password)
@@ -109,10 +202,13 @@ class PreparacaoLoteModule(BaseModule):
                     time.sleep(1)
             except Exception:
                 pass
+
             wait.until(EC.element_to_be_clickable((
                 By.XPATH, "//a[contains(@class, 'setupAjax') and contains(text(), 'Preparar exames para fatura')]"
             ))).click()
             time.sleep(1)
+
+            # Processar cada exame
             for exame in exames_unicos:
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
@@ -169,33 +265,33 @@ class PreparacaoLoteModule(BaseModule):
                 except Exception as e:
                     resultados.append({"exame": exame, "status": "erro", "erro": str(e)})
                     log_message(f"❌ Erro ao processar {exame}: {e}", "ERROR")
+
+            # Mostrar relatório de processamento
             total = len(resultados)
             sucesso = [r for r in resultados if r["status"] == "sucesso"]
             erro = [r for r in resultados if r["status"] == "erro"]
             sem_resultados = [r for r in resultados if r["status"] == "sem_resultados"]
             erro_validacao = [r for r in resultados if r["status"] == "erro_validacao"]
-            log_message("\nResumo do processamento:", "INFO")
+
+            log_message(f"\n📊 Resumo do processamento - {contexto}:", "INFO")
             log_message(f"Total: {total}", "INFO")
             log_message(f"Sucesso: {len(sucesso)}", "SUCCESS")
             log_message(f"Sem resultados: {len(sem_resultados)}", "WARNING")
             log_message(f"Erro validação: {len(erro_validacao)}", "WARNING")
             log_message(f"Erro processamento: {len(erro)}", "ERROR")
-            messagebox.showinfo("Sucesso",
-                f"✅ Processamento finalizado!\n"
-                f"Total: {total}\n"
-                f"Sucesso: {len(sucesso)}\n"
-                f"Sem resultados: {len(sem_resultados)}\n"
-                f"Erros: {len(erro) + len(erro_validacao)}"
-            )
 
+            # Processa envio para Unimed se necessário
             if gera_xml_tiss == "sim":
+                log_message("🚀 Iniciando processo de envio para Unimed...", "INFO")
                 automacao = XMLGeneratorAutomation(username, password, pasta_download=pasta_download, headless=headless_mode)
                 sucesso_envio = automacao.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
                 if not sucesso_envio:
-                    log_message("Falha ao processar/enviar lote para Unimed.", "ERROR")
+                    log_message("❌ Falha ao processar/enviar lote para Unimed.", "ERROR")
+                    return False
                 else:
-                    log_message("Lote enviado para Unimed com sucesso!", "SUCCESS")
+                    log_message("✅ Lote enviado para Unimed com sucesso!", "SUCCESS")
 
+            # Processa rotina manual se necessário
             if gera_xml_tiss == "nao":
                 log_message("Executando rotina de geração de lote manual...", "INFO")
                 try:
@@ -223,11 +319,10 @@ class PreparacaoLoteModule(BaseModule):
                     select_conferido.select_by_value("O")
                     time.sleep(1)
 
-                    # Executar pesquisa
                     botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento")))
                     botao_pesquisar.click()
                     time.sleep(2)
-                    # Aguardar finalização da pesquisa
+
                     tempo_maximo = time.time() + 60
                     while time.time() < tempo_maximo:
                         try:
@@ -247,7 +342,7 @@ class PreparacaoLoteModule(BaseModule):
                         time.sleep(1)
                     except Exception as e:
                         log_message(f"Não foi possível desmarcar gerarArquivoTiss: {e}", "WARNING")
-                    # Clicar no botão de situação de faturamento
+
                     try:
                         botao_situacao = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']")))
                         botao_situacao.click()
@@ -261,9 +356,13 @@ class PreparacaoLoteModule(BaseModule):
                         log_message(f"Não foi possível clicar no botão de situação de faturamento: {e}", "ERROR")
                 except Exception as e:
                     log_message(f"Erro na rotina de geração de XML TISS manual: {e}", "ERROR")
+
+            return True
+
         except Exception as e:
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
             messagebox.showerror("Erro", f"❌ Erro durante a automação:\n{e}")
+            return False
         finally:
             driver.quit()
 

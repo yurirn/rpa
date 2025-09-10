@@ -11,22 +11,12 @@
   },
   {
     "id": "preparacao_lote",
-    "name": "Preparação Lote (Excel)",
-    "description": "Lê arquivo Excel e marca exames como 'Conferido: On-line'",
+    "name": "Preparação Lote e Envio Unimed",
+    "description": "Lê arquivo Excel e marca exames como 'Conferido: On-line, caso o checkbox de Gerar XML TISS esteja marcado faz o envio para a Unimed, caso não esteja marcado apenas gera o lote.'",
     "module_path": "modules.preparacao_lote",
     "requires_excel": true,
     "tipo_busca": true,
     "has_gera_xml_tiss": true,
-    "requires_unimed_credentials": true
-  },
-  {
-    "id": "envio_lote_unimed",
-    "name": "Envio Lote Unimed",
-    "description": "Gera arquivo XML e faz o envio para a Unimed",
-    "module_path": "modules.envio_lote_unimed",
-    "requires_excel": false,
-    "tipo_busca": false,
-    "has_gera_xml_tiss": false,
     "requires_unimed_credentials": true
   },
   {
