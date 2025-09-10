@@ -63,7 +63,7 @@ class GuiaUnimedModule(BaseModule):
             log_message(f"✅ Carregadas {len(guias)} guias do Excel", "SUCCESS")
             
             # Criar DataFrame para armazenar resultados
-            resultados_df = pd.DataFrame(columns=["GUIA", "CARTAO", "MEDICO", "PROCEDIMENTOS", "QTD", "TEXTO"])
+            resultados_df = pd.DataFrame(columns=["GUIA", "CARTAO", "MEDICO", "CRM", "PROCEDIMENTOS", "QTD", "TEXTO"])
 
             # Login
             driver.get(url)
@@ -219,6 +219,7 @@ class GuiaUnimedModule(BaseModule):
                             "GUIA": guia,
                             "CARTAO": "",
                             "MEDICO": "",
+                            "CRM": "",
                             "PROCEDIMENTOS": "",
                             "QTD": "",
                             "TEXTO": ""
@@ -382,8 +383,9 @@ class GuiaUnimedModule(BaseModule):
                             log_message(f"❌ Erro ao marcar checkbox do exame: {e}", "ERROR")
                             raise Exception(f"Não foi possível marcar o exame: {e}")
                         
-                        # Extrair nome do médico do modal aberto
+                        # Extrair nome do médico e CRM do modal aberto
                         medico = ""
+                        crm = ""
                         try:
                             # Método 1: Usar JavaScript para extrair o valor do input (mais confiável)
                             try:
@@ -449,8 +451,134 @@ class GuiaUnimedModule(BaseModule):
                                             except Exception:
                                                 log_message("⚠️ Todos os métodos falharam para encontrar o médico", "WARNING")
                             
+                            # Extrair CRM do typeahead dropdown
+                            try:
+                                log_message("Extraindo CRM do médico...", "INFO")
+                                
+                                # Função helper para verificar se dropdown está pronto
+                                def dropdown_pronto():
+                                    try:
+                                        dropdown = driver.find_element(By.CSS_SELECTOR, "ul.typeahead li.active a")
+                                        return dropdown.is_displayed() and "CRM:" in dropdown.text
+                                    except:
+                                        return False
+                                
+                                # Função helper para aguardar condição com polling rápido
+                                def aguardar_condicao(condicao_func, timeout=5, intervalo=0.1):
+                                    import time
+                                    start_time = time.time()
+                                    while time.time() - start_time < timeout:
+                                        if condicao_func():
+                                            return True
+                                        time.sleep(intervalo)
+                                    return False
+                                
+                                # Aguardar tabela aparecer com polling rápido
+                                def tabela_pronta():
+                                    try:
+                                        return driver.find_element(By.ID, "requisicao_r").is_displayed()
+                                    except:
+                                        return False
+                                
+                                if not aguardar_condicao(tabela_pronta, timeout=8):
+                                    raise Exception("Tabela não carregou")
+                                
+                                # Verificar se dropdown já está visível
+                                if dropdown_pronto():
+                                    log_message("✅ Dropdown já visível!", "SUCCESS")
+                                else:
+                                    # Tentar ativar dropdown
+                                    ativado = False
+                                    
+                                    # Método 1: Input
+                                    try:
+                                        def input_pronto():
+                                            try:
+                                                input_elem = driver.find_element(By.CSS_SELECTOR, "#requisicao_r #medicoRequisitanteInput")
+                                                return input_elem.is_displayed() and input_elem.is_enabled()
+                                            except:
+                                                return False
+                                        
+                                        if aguardar_condicao(input_pronto, timeout=3):
+                                            medico_input = driver.find_element(By.CSS_SELECTOR, "#requisicao_r #medicoRequisitanteInput")
+                                            medico_input.click()
+                                            
+                                            if aguardar_condicao(dropdown_pronto, timeout=2):
+                                                log_message("✅ Dropdown ativado via input", "SUCCESS")
+                                                ativado = True
+                                    except:
+                                        pass
+                                    
+                                    # Método 2: Âncora (se input falhou)
+                                    if not ativado:
+                                        try:
+                                            def ancora_pronta():
+                                                try:
+                                                    ancora = driver.find_element(By.CSS_SELECTOR, "#requisicao_r a.table-editable-ancora.autocomplete.autocompleteSetup")
+                                                    return ancora.is_displayed() and ancora.is_enabled()
+                                                except:
+                                                    return False
+                                            
+                                            if aguardar_condicao(ancora_pronta, timeout=2):
+                                                ancora = driver.find_element(By.CSS_SELECTOR, "#requisicao_r a.table-editable-ancora.autocomplete.autocompleteSetup")
+                                                ancora.click()
+                                                
+                                                if aguardar_condicao(dropdown_pronto, timeout=2):
+                                                    log_message("✅ Dropdown ativado via âncora", "SUCCESS")
+                                                    ativado = True
+                                        except:
+                                            pass
+                                    
+                                    if not ativado:
+                                        log_message("⚠️ Não conseguiu ativar dropdown", "WARNING")
+                                
+                                # Extrair CRM do dropdown (método otimizado)
+                                crm = ""
+                                try:
+                                    # Método JavaScript mais rápido
+                                    crm = driver.execute_script("""
+                                        try {
+                                            let crmElement = document.querySelector("ul.typeahead li.active a");
+                                            if (crmElement && crmElement.innerText) {
+                                                let crmText = crmElement.innerText;
+                                                let crmMatch = crmText.match(/CRM:\\s*(\\S+)/);
+                                                return crmMatch ? crmMatch[1] : null;
+                                            }
+                                        } catch (e) {}
+                                        return null;
+                                    """)
+                                    
+                                    if crm:
+                                        log_message(f"✅ CRM encontrado: {crm}", "SUCCESS")
+                                    else:
+                                        # Fallback direto sem delay
+                                        try:
+                                            dropdown_elem = driver.find_element(By.CSS_SELECTOR, "ul.typeahead li.active a")
+                                            crm_text = dropdown_elem.text
+                                            import re
+                                            crm_match = re.search(r'CRM:\s*(\S+)', crm_text)
+                                            if crm_match:
+                                                crm = crm_match.group(1)
+                                                log_message(f"✅ CRM extraído: {crm}", "SUCCESS")
+                                        except:
+                                            log_message("⚠️ CRM não encontrado", "WARNING")
+                                
+                                except Exception as e:
+                                    log_message(f"⚠️ Erro ao extrair CRM: {e}", "WARNING")
+                                
+                                # Fechar dropdown rapidamente
+                                try:
+                                    driver.execute_script("document.body.click();")
+                                except:
+                                    pass
+                                    
+                            except Exception as e:
+                                log_message(f"⚠️ Erro ao extrair CRM: {e}", "WARNING")
+                            
                             if not medico:
                                 log_message("⚠️ Não foi possível encontrar o médico requisitante", "WARNING")
+                            if not crm:
+                                log_message("⚠️ Não foi possível encontrar o CRM", "WARNING")
                         except Exception as e:
                             log_message(f"⚠️ Erro ao obter médico requisitante: {e}", "WARNING")
                         
@@ -510,6 +638,7 @@ class GuiaUnimedModule(BaseModule):
                             "GUIA": guia,
                             "CARTAO": cartao,
                             "MEDICO": medico,
+                            "CRM": crm,
                             "PROCEDIMENTOS": procedimentos_str,
                             "QTD": quantidades_str,
                             "TEXTO": texto
@@ -527,6 +656,7 @@ class GuiaUnimedModule(BaseModule):
                             "GUIA": guia,
                             "CARTAO": cartao if 'cartao' in locals() else "",
                             "MEDICO": "",
+                            "CRM": "",
                             "PROCEDIMENTOS": procedimentos_str if 'procedimentos_str' in locals() else "",
                             "QTD": quantidades_str if 'quantidades_str' in locals() else "",
                             "TEXTO": ""
@@ -541,6 +671,7 @@ class GuiaUnimedModule(BaseModule):
                         "GUIA": guia,
                         "CARTAO": "",
                         "MEDICO": "",
+                        "CRM": "",
                         "PROCEDIMENTOS": "",
                         "QTD": "",
                         "TEXTO": ""
