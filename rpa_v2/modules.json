@@ -17,7 +17,7 @@
     "requires_excel": true,
     "tipo_busca": true,
     "has_gera_xml_tiss": true,
-    "requires_unimed_credentials": false
+    "requires_unimed_credentials": true
   },
   {
     "id": "envio_lote_unimed",

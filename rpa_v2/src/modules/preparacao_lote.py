@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
 from src.modules.base import BaseModule
+from src.modules.envio_lote_unimed import XMLGeneratorAutomation
 
 load_dotenv()
 
@@ -31,14 +32,32 @@ class PreparacaoLoteModule(BaseModule):
             raise ValueError("Modo de busca inválido. Use 'exame' ou 'guia'.")
         return unique_exames
 
+    def get_unique_exames_multiplas_abas(self, file_path: str, modo_busca: str):
+        abas = pd.ExcelFile(file_path).sheet_names
+        exames_por_aba = {}
+        for aba in abas:
+            if modo_busca == "exame":
+                df = pd.read_excel(file_path, sheet_name=aba)
+                unique_exames = df['Exame'].dropna().unique().tolist()
+            elif modo_busca == "guia":
+                df = pd.read_excel(file_path, sheet_name=aba, header=None)
+                unique_exames = df.iloc[:, 0].dropna().unique().tolist()
+            else:
+                raise ValueError("Modo de busca inválido. Use 'exame' ou 'guia'.")
+            exames_por_aba[aba] = unique_exames
+        return exames_por_aba
+
     def run(self, params: dict):
         username = params.get("username")
         password = params.get("password")
         excel_file = params.get("excel_file")
-        modo_busca = params.get("modo_busca", "exame")  # padrão: exame
+        modo_busca = params.get("modo_busca", "exame")
         cancel_flag = params.get("cancel_flag")
         gera_xml_tiss = params.get("gera_xml_tiss", "sim")
         headless_mode = params.get("headless_mode")
+        unimed_user = params.get("unimed_user")
+        unimed_pass = params.get("unimed_pass")
+        pasta_download = params.get("pasta_download", os.path.join(os.getcwd(), "xml"))
         try:
             exames_unicos = self.get_unique_exames(excel_file, modo_busca)
         except Exception as e:
@@ -71,7 +90,6 @@ class PreparacaoLoteModule(BaseModule):
                     log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    # Tentar navegar diretamente pela URL como fallback
                     driver.get("https://pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
@@ -80,7 +98,6 @@ class PreparacaoLoteModule(BaseModule):
                 log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                # Tentar navegar diretamente como fallback
                 driver.get("https://pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
@@ -170,6 +187,14 @@ class PreparacaoLoteModule(BaseModule):
                 f"Sem resultados: {len(sem_resultados)}\n"
                 f"Erros: {len(erro) + len(erro_validacao)}"
             )
+
+            if gera_xml_tiss == "sim":
+                automacao = XMLGeneratorAutomation(username, password, pasta_download=pasta_download, headless=headless_mode)
+                sucesso_envio = automacao.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
+                if not sucesso_envio:
+                    log_message("Falha ao processar/enviar lote para Unimed.", "ERROR")
+                else:
+                    log_message("Lote enviado para Unimed com sucesso!", "SUCCESS")
 
             if gera_xml_tiss == "nao":
                 log_message("Executando rotina de geração de lote manual...", "INFO")
