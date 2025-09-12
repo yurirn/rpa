@@ -153,6 +153,14 @@ class MainWindow:
         has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
         requires_unimed_credentials = module.get("requires_unimed_credentials") if module else False
 
+        # Armazenar referências dos módulos para uso posterior
+        self.current_module_config = {
+            'requires_excel': requires_excel,
+            'tipo_busca': tipo_busca,
+            'has_gera_xml_tiss': has_gera_xml_tiss,
+            'requires_unimed_credentials': requires_unimed_credentials
+        }
+
         row = 0
         if requires_excel:
             self.params_frame.columnconfigure(1, weight=1)
@@ -173,39 +181,61 @@ class MainWindow:
             self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
             row += 1
 
-        if requires_unimed_credentials:
-
-            ttk.Label(self.params_frame, text="Credenciais Unimed:", font=('Arial', 10, 'bold')).grid(row=row, column=0,columnspan=3,sticky="w")
-            row += 1
-
-            ttk.Label(self.params_frame, text="Usuário Unimed:").grid(row=row, column=0, sticky="w", pady=(5, 0))
-            unimed_user_entry = ttk.Entry(self.params_frame, textvariable=self.unimed_user, width=30)
-            unimed_user_entry.grid(row=row, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
-            row += 1
-
-            ttk.Label(self.params_frame, text="Senha Unimed:").grid(row=row, column=0, sticky="w", pady=(5, 0))
-            unimed_pass_frame = ttk.Frame(self.params_frame)
-            unimed_pass_frame.grid(row=row, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
-
-            self.unimed_password_entry = ttk.Entry(unimed_pass_frame, textvariable=self.unimed_password, show="*",
-                                                   width=25)
-            self.unimed_password_entry.pack(side=tk.LEFT)
-
-            ttk.Checkbutton(unimed_pass_frame, text="Mostrar", variable=self.show_unimed_password, command=self.toggle_unimed_password_visibility).pack(side=tk.LEFT, padx=(10, 0))
-            row += 1
-
         if has_gera_xml_tiss:
             ttk.Label(self.params_frame, text="Gera XML TISS?:").grid(row=row, column=0, sticky="w", pady=(15, 5))
             gera_xml_frame = ttk.Frame(self.params_frame)
             gera_xml_frame.grid(row=row, column=1, sticky="w", columnspan=2)
-            ttk.Radiobutton(gera_xml_frame, text="Sim", variable=self.gera_xml_tiss, value="sim").pack(side=tk.LEFT, padx=(0, 20))
-            ttk.Radiobutton(gera_xml_frame, text="Não", variable=self.gera_xml_tiss, value="nao").pack(side=tk.LEFT)
+            ttk.Radiobutton(gera_xml_frame, text="Sim", variable=self.gera_xml_tiss, value="sim", command=self.on_gera_xml_tiss_changed).pack(side=tk.LEFT, padx=(0, 20))
+            ttk.Radiobutton(gera_xml_frame, text="Não", variable=self.gera_xml_tiss, value="nao", command=self.on_gera_xml_tiss_changed).pack(side=tk.LEFT)
             row += 1
+
+        # Criar container para credenciais Unimed (será mostrado/escondido dinamicamente)
+        if requires_unimed_credentials:
+            self.unimed_credentials_frame = ttk.Frame(self.params_frame)
+            self.unimed_credentials_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+            self.unimed_credentials_frame.columnconfigure(1, weight=1)
+
+            ttk.Label(self.unimed_credentials_frame, text="Credenciais Unimed:", font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=3, sticky="w")
+
+            ttk.Label(self.unimed_credentials_frame, text="Usuário Unimed:").grid(row=1, column=0, sticky="w", pady=(5, 0))
+            unimed_user_entry = ttk.Entry(self.unimed_credentials_frame, textvariable=self.unimed_user, width=30)
+            unimed_user_entry.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+
+            ttk.Label(self.unimed_credentials_frame, text="Senha Unimed:").grid(row=2, column=0, sticky="w", pady=(5, 0))
+            unimed_pass_frame = ttk.Frame(self.unimed_credentials_frame)
+            unimed_pass_frame.grid(row=2, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+
+            self.unimed_password_entry = ttk.Entry(unimed_pass_frame, textvariable=self.unimed_password, show="*", width=25)
+            self.unimed_password_entry.pack(side=tk.LEFT)
+
+            ttk.Checkbutton(unimed_pass_frame, text="Mostrar", variable=self.show_unimed_password, command=self.toggle_unimed_password_visibility).pack(side=tk.LEFT, padx=(10, 0))
+
+            # Inicialmente mostrar/esconder baseado no valor atual do gera_xml_tiss
+            self.update_unimed_credentials_visibility()
+            row += 1
+
         if not requires_excel and not has_gera_xml_tiss:
             ttk.Label(self.params_frame, text="Os parâmetros aparecerão aqui quando um módulo for selecionado", foreground="gray").pack(pady=20)
 
     def on_tipo_busca_changed(self):
         self.descricao_tipo.config(text=self.get_descricao_tipo_busca(self.tipo_busca.get()))
+
+    def on_gera_xml_tiss_changed(self):
+        """Callback chamado quando a opção 'Gera XML TISS' é alterada"""
+        self.update_unimed_credentials_visibility()
+
+    def update_unimed_credentials_visibility(self):
+        """Mostra ou esconde as credenciais da Unimed baseado na seleção do XML TISS"""
+        if hasattr(self, 'unimed_credentials_frame') and hasattr(self, 'current_module_config'):
+            if (self.current_module_config.get('requires_unimed_credentials') and
+                self.current_module_config.get('has_gera_xml_tiss')):
+
+                if self.gera_xml_tiss.get() == "sim":
+                    # Mostrar credenciais da Unimed
+                    self.unimed_credentials_frame.grid()
+                else:
+                    # Esconder credenciais da Unimed
+                    self.unimed_credentials_frame.grid_remove()
 
     def get_descricao_tipo_busca(self, tipo):
         if tipo == "numero_exame":
@@ -317,8 +347,9 @@ class MainWindow:
             unimed_user = self.unimed_user.get().strip()
             unimed_pass = self.unimed_password.get().strip()
             if not unimed_user or not unimed_pass:
-                messagebox.showwarning("Credenciais Unimed", "Preencha usuário e senha da Unimed!")
-                return
+                if self.gera_xml_tiss.get() == "sim" or self.gera_xml_tiss.get() is None:
+                    messagebox.showwarning("Credenciais Unimed", "Preencha usuário e senha da Unimed!")
+                    return
             params.update({
                 "unimed_user": unimed_user,
                 "unimed_pass": unimed_pass
@@ -478,3 +509,4 @@ Os módulos serão implementados gradualmente.
 
     def run(self):
         self.root.mainloop()
+
