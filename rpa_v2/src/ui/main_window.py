@@ -31,11 +31,13 @@ class MainWindow:
         self.excel_file_path = tk.StringVar()
         self.tipo_busca = tk.StringVar(value="numero_exame")
         self.gera_xml_tiss = tk.StringVar(value="sim")
-        self.headless_mode = tk.BooleanVar(value=False)
+        self.headless_mode = tk.BooleanVar(value=True)
 
         self.unimed_user = tk.StringVar()
         self.unimed_password = tk.StringVar()
         self.show_unimed_password = tk.BooleanVar(value=False)
+
+        self.cobrar_de = tk.StringVar(value="C")
 
         self.modules = self.load_modules()
         self.module_id_map = {m['id']: m for m in self.modules}
@@ -152,13 +154,15 @@ class MainWindow:
         tipo_busca = module.get("tipo_busca") if module else False
         has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
         requires_unimed_credentials = module.get("requires_unimed_credentials") if module else False
+        has_cobrar_de = module.get("has_cobrar_de") if module else False
 
         # Armazenar referências dos módulos para uso posterior
         self.current_module_config = {
             'requires_excel': requires_excel,
             'tipo_busca': tipo_busca,
             'has_gera_xml_tiss': has_gera_xml_tiss,
-            'requires_unimed_credentials': requires_unimed_credentials
+            'requires_unimed_credentials': requires_unimed_credentials,
+            'has_cobrar_de': has_cobrar_de
         }
 
         row = 0
@@ -179,6 +183,20 @@ class MainWindow:
             self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"),
                                             foreground="blue")
             self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
+            row += 1
+
+        if has_cobrar_de:
+            ttk.Label(self.params_frame, text="Cobrar de:").grid(row=row, column=0, sticky="w", pady=(15, 5))
+            cobrar_frame = ttk.Frame(self.params_frame)
+            cobrar_frame.grid(row=row, column=1, sticky="w", columnspan=2)
+            ttk.Radiobutton(cobrar_frame, text="Convênio", variable=self.cobrar_de, value="C",
+                            command=self.on_cobrar_de_changed).pack(side=tk.LEFT, padx=(0, 20))
+            ttk.Radiobutton(cobrar_frame, text="Procedência", variable=self.cobrar_de, value="P",
+                            command=self.on_cobrar_de_changed).pack(side=tk.LEFT)
+            row += 1
+            self.descricao_cobrar = ttk.Label(self.params_frame, text=self.get_descricao_cobrar_de("C"),
+                                              foreground="blue")
+            self.descricao_cobrar.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
             row += 1
 
         if has_gera_xml_tiss:
@@ -223,6 +241,16 @@ class MainWindow:
     def on_gera_xml_tiss_changed(self):
         """Callback chamado quando a opção 'Gera XML TISS' é alterada"""
         self.update_unimed_credentials_visibility()
+
+    def on_cobrar_de_changed(self):
+        """Callback chamado quando a opção 'Cobrar de' é alterada"""
+        self.descricao_cobrar.config(text=self.get_descricao_cobrar_de(self.cobrar_de.get()))
+
+    def get_descricao_cobrar_de(self, tipo):
+        """Retorna a descrição do tipo de cobrança selecionado"""
+        if tipo == "C":
+            return "💳 Cobrança será direcionada ao convênio."
+        return "🏥 Cobrança será direcionada à procedência."
 
     def update_unimed_credentials_visibility(self):
         """Mostra ou esconde as credenciais da Unimed baseado na seleção do XML TISS"""
@@ -343,6 +371,8 @@ class MainWindow:
             })
         if module.get("has_gera_xml_tiss"):
             params["gera_xml_tiss"] = self.gera_xml_tiss.get()
+        if module.get("has_cobrar_de"):
+            params["cobrar_de"] = self.cobrar_de.get()
         if module.get("requires_unimed_credentials"):
             unimed_user = self.unimed_user.get().strip()
             unimed_pass = self.unimed_password.get().strip()
