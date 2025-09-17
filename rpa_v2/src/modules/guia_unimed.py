@@ -25,8 +25,11 @@ class GuiaUnimedModule(BaseModule):
             df = pd.read_excel(file_path, header=0)
             # Pegar a primeira coluna, ignorando a primeira linha (cabeçalho)
             guias = df.iloc[:, 0].dropna().tolist()
-            if guias and guias[0].upper() == "GUIA":
+            # Verificar se a primeira linha é cabeçalho (pode ser string "GUIA" ou similar)
+            if guias and isinstance(guias[0], str) and guias[0].upper() == "GUIA":
                 guias = guias[1:]  # Remove o cabeçalho se for "GUIA"
+            # Converter todos os valores para string para garantir compatibilidade
+            guias = [str(guia).strip() for guia in guias if str(guia).strip()]
             return guias
         except Exception as e:
             raise ValueError(f"Erro ao ler o Excel: {e}")
@@ -143,10 +146,18 @@ class GuiaUnimedModule(BaseModule):
                 try:
                     log_message(f"➡️ Processando guia: {guia}", "INFO")
                     
-                    # Digitar o exame no campo numeroExame
-                    campo_exame = wait.until(EC.presence_of_element_located((By.ID, "numeroExame")))
+                    # Digitar o código de barras no campo codigoBarras
+                    log_message(f"🔍 Aguardando campo código de barras estar disponível...", "INFO")
+                    campo_exame = wait.until(EC.element_to_be_clickable((By.ID, "codigoBarras")))
+
+                    # Aguardar um pouco para garantir que o campo está pronto
+                    time.sleep(1)
+
+                    # Limpar e preencher o campo
                     campo_exame.clear()
+                    time.sleep(0.5)
                     campo_exame.send_keys(str(guia))
+                    log_message(f"✅ Código de barras {guia} digitado no campo", "SUCCESS")
                     time.sleep(0.5)
                     
                     # Clicar no botão Pesquisar
