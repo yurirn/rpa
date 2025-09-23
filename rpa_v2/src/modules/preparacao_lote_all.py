@@ -120,7 +120,7 @@ class PreparacaoLoteModule(BaseModule):
             select_element2 = wait.until(EC.presence_of_element_located((By.ID, "cobrarDe")))
             select_cobrar_de = Select(select_element2)
             select_cobrar_de.select_by_value("")
-            time.sleep(1)
+            time.sleep(0.5)
 
             campo_id = "numeroGuia" if modo_busca == "guia" else "numeroExame"
             campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
@@ -139,7 +139,7 @@ class PreparacaoLoteModule(BaseModule):
             except Exception:
                 log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
 
-            time.sleep(1)
+            time.sleep(1.5)
 
             # Validar se há resultados
             try:
@@ -232,6 +232,7 @@ class PreparacaoLoteModule(BaseModule):
                 (By.XPATH, f"//li[contains(@class, 'select2-results__option') and text()='{convenio}']"))
         )
         opcao_convenio.click()
+        log_message(f"✅ Convenio {convenio} inserido com sucesso.", "SUCCESS")
         time.sleep(1)
 
         select2_container_procedencia = wait.until(
@@ -245,12 +246,14 @@ class PreparacaoLoteModule(BaseModule):
                 (By.XPATH, f"//li[contains(@class, 'select2-results__option') and text()='{procedencia}']"))
         )
         opcao_procedencia.click()
+        log_message(f"✅ Procedencia {procedencia} inserida com sucesso.", "SUCCESS")
         time.sleep(1)
 
         # Configurar seletor conferido
         select_element1 = wait.until(EC.presence_of_element_located((By.ID, "conferido")))
         select_conferido = Select(select_element1)
         select_conferido.select_by_value("O")
+        log_message(f"✅ Filtro on-line inserido com sucesso.", "SUCCESS")
         time.sleep(1)
 
         # Configurar cobrar de - usando o parâmetro recebido
