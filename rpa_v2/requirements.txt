@@ -4,3 +4,6 @@ requests~=2.32.4
 python-dotenv~=1.1.1
 pandas~=2.3.1
 openpyxl~=3.1.5
+paddleocr~=3.1.0
+paddlepaddle~=3.1.0
+setuptools~=80.9.0
