@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ans:mensagemTISS xmlns:ans="http://www.ans.gov.br/padroes/tiss/schemas" xmlns:ns2="http://www.w3.org/2000/09/xmldsig#">
+    <ans:cabecalho>
+        <ans:identificacaoTransacao>
+            <ans:tipoTransacao>ENVIO_LOTE_GUIAS</ans:tipoTransacao>
+            <ans:sequencialTransacao>291827</ans:sequencialTransacao>
+            <ans:dataRegistroTransacao>2025-10-06</ans:dataRegistroTransacao>
+            <ans:horaRegistroTransacao>10:30:36</ans:horaRegistroTransacao>
+        </ans:identificacaoTransacao>
+        <ans:origem>
+            <ans:identificacaoPrestador>
+                <ans:CNPJ>19653081000157</ans:CNPJ>
+            </ans:identificacaoPrestador>
+        </ans:origem>
+        <ans:destino>
+            <ans:registroANS>343269</ans:registroANS>
+        </ans:destino>
+        <ans:Padrao>4.01.00</ans:Padrao>
+    </ans:cabecalho>
+    <ans:prestadorParaOperadora>
+        <ans:loteGuias>
+            <ans:numeroLote>1618</ans:numeroLote>
+            <ans:guiasTISS>
+                <ans:guiaSP-SADT>
+                    <ans:cabecalhoGuia>
+                        <ans:registroANS>343269</ans:registroANS>
+                        <ans:numeroGuiaPrestador>100545446</ans:numeroGuiaPrestador>
+                    </ans:cabecalhoGuia>
+                    <ans:dadosAutorizacao>
+                        <ans:numeroGuiaOperadora>100545446</ans:numeroGuiaOperadora>
+                        <ans:dataAutorizacao>2025-09-09</ans:dataAutorizacao>
+                        <ans:senha>100545446</ans:senha>
+                    </ans:dadosAutorizacao>
+                    <ans:dadosBeneficiario>
+                        <ans:numeroCarteira>0050000045433367</ans:numeroCarteira>
+                        <ans:atendimentoRN>N</ans:atendimentoRN>
+                    </ans:dadosBeneficiario>
+                    <ans:dadosSolicitante>
+                        <ans:contratadoSolicitante>
+                            <ans:cnpjContratado>19653081000157</ans:cnpjContratado>
+                        </ans:contratadoSolicitante>
+                        <ans:nomeContratadoSolicitante>LABORATORIO DAP</ans:nomeContratadoSolicitante>
+                        <ans:profissionalSolicitante>
+                            <ans:nomeProfissional>LUIS CARLOS ADAS OLIVEIRA</ans:nomeProfissional>
+                            <ans:conselhoProfissional>06</ans:conselhoProfissional>
+                            <ans:numeroConselhoProfissional>9683</ans:numeroConselhoProfissional>
+                            <ans:UF>41</ans:UF>
+                            <ans:CBOS>225225</ans:CBOS>
+                        </ans:profissionalSolicitante>
+                    </ans:dadosSolicitante>
+                    <ans:dadosSolicitacao>
+                        <ans:dataSolicitacao>2025-09-09</ans:dataSolicitacao>
+                        <ans:caraterAtendimento>1</ans:caraterAtendimento>
+                    </ans:dadosSolicitacao>
+                    <ans:dadosExecutante>
+                        <ans:contratadoExecutante>
+                            <ans:cnpjContratado>19653081000157</ans:cnpjContratado>
+                        </ans:contratadoExecutante>
+                        <ans:CNES>7853157</ans:CNES>
+                    </ans:dadosExecutante>
+                    <ans:dadosAtendimento>
+                        <ans:tipoAtendimento>23</ans:tipoAtendimento>
+                        <ans:indicacaoAcidente>9</ans:indicacaoAcidente>
+                        <ans:regimeAtendimento>01</ans:regimeAtendimento>
+                    </ans:dadosAtendimento>
+                    <ans:procedimentosExecutados>
+                        <ans:procedimentoExecutado>
+                            <ans:sequencialItem>1</ans:sequencialItem>
+                            <ans:dataExecucao>2025-09-09</ans:dataExecucao>
+                            <ans:horaInicial>08:01:00</ans:horaInicial>
+                            <ans:horaFinal>09:01:00</ans:horaFinal>
+                            <ans:procedimento>
+<ans:codigoTabela>22</ans:codigoTabela>
+<ans:codigoProcedimento>40601110</ans:codigoProcedimento>
+<ans:descricaoProcedimento>Procedimento diagnostico em biopsia simples "imprint" e "cel</ans:descricaoProcedimento>
+                            </ans:procedimento>
+                            <ans:quantidadeExecutada>1</ans:quantidadeExecutada>
+                            <ans:reducaoAcrescimo>1</ans:reducaoAcrescimo>
+                            <ans:valorUnitario>82.90</ans:valorUnitario>
+                            <ans:valorTotal>82.90</ans:valorTotal>
+                        </ans:procedimentoExecutado>
+                        <ans:procedimentoExecutado>
+                            <ans:sequencialItem>2</ans:sequencialItem>
+                            <ans:dataExecucao>2025-09-09</ans:dataExecucao>
+                            <ans:horaInicial>08:02:00</ans:horaInicial>
+                            <ans:horaFinal>09:02:00</ans:horaFinal>
+                            <ans:procedimento>
+<ans:codigoTabela>22</ans:codigoTabela>
+<ans:codigoProcedimento>40601269</ans:codigoProcedimento>
+<ans:descricaoProcedimento>Coloracao especial por coloracao</ans:descricaoProcedimento>
+                            </ans:procedimento>
+                            <ans:quantidadeExecutada>3</ans:quantidadeExecutada>
+                            <ans:reducaoAcrescimo>1</ans:reducaoAcrescimo>
+                            <ans:valorUnitario>42.08</ans:valorUnitario>
+                            <ans:valorTotal>126.24</ans:valorTotal>
+                        </ans:procedimentoExecutado>
+                        <ans:procedimentoExecutado>
+                            <ans:sequencialItem>3</ans:sequencialItem>
+                            <ans:dataExecucao>2025-09-09</ans:dataExecucao>
+                            <ans:horaInicial>08:03:00</ans:horaInicial>
+                            <ans:horaFinal>09:03:00</ans:horaFinal>
+                            <ans:procedimento>
+<ans:codigoTabela>22</ans:codigoTabela>
+<ans:codigoProcedimento>40601200</ans:codigoProcedimento>
+<ans:descricaoProcedimento>Procedimento diagnostico em peca anatomica ou cirurgica simp</ans:descricaoProcedimento>
+                            </ans:procedimento>
+                            <ans:quantidadeExecutada>2</ans:quantidadeExecutada>
+                            <ans:reducaoAcrescimo>1</ans:reducaoAcrescimo>
+                            <ans:valorUnitario>148.71</ans:valorUnitario>
+                            <ans:valorTotal>297.42</ans:valorTotal>
+                        </ans:procedimentoExecutado>
+                    </ans:procedimentosExecutados>
+                    <ans:valorTotal>
+                        <ans:valorProcedimentos>506.56</ans:valorProcedimentos>
+                        <ans:valorDiarias>0</ans:valorDiarias>
+                        <ans:valorTaxasAlugueis>0</ans:valorTaxasAlugueis>
+                        <ans:valorMateriais>0</ans:valorMateriais>
+                        <ans:valorMedicamentos>0</ans:valorMedicamentos>
+                        <ans:valorOPME>0</ans:valorOPME>
+                        <ans:valorGasesMedicinais>0</ans:valorGasesMedicinais>
+                        <ans:valorTotalGeral>506.56</ans:valorTotalGeral>
+                    </ans:valorTotal>
+                </ans:guiaSP-SADT>
+            </ans:guiasTISS>
+        </ans:loteGuias>
+    </ans:prestadorParaOperadora>
+    <ans:epilogo>
+        <ans:hash>40cd48c14c8be039e0d064495c26ce68</ans:hash>
+    </ans:epilogo>
+</ans:mensagemTISS>

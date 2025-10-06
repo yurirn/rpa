@@ -36,6 +36,7 @@ class MainWindow:
         self.unimed_user = tk.StringVar()
         self.unimed_password = tk.StringVar()
         self.show_unimed_password = tk.BooleanVar(value=False)
+        self.save_unimed_credentials = tk.BooleanVar(value=False)
 
         self.cobrar_de = tk.StringVar(value="C")
 
@@ -227,6 +228,15 @@ class MainWindow:
             self.unimed_password_entry.pack(side=tk.LEFT)
 
             ttk.Checkbutton(unimed_pass_frame, text="Mostrar", variable=self.show_unimed_password, command=self.toggle_unimed_password_visibility).pack(side=tk.LEFT, padx=(10, 0))
+
+            # Checkbox para salvar credenciais da Unimed
+            self.save_unimed_check = ttk.Checkbutton(
+                self.unimed_credentials_frame,
+                text="Salvar credenciais Unimed neste computador",
+                variable=self.save_unimed_credentials,
+                command=self.on_save_unimed_credentials_changed
+            )
+            self.save_unimed_check.grid(row=3, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
             # Inicialmente mostrar/esconder baseado no valor atual do gera_xml_tiss
             self.update_unimed_credentials_visibility()
@@ -450,6 +460,31 @@ class MainWindow:
         except:
             return ""
 
+    def _encode_unimed_password(self, password):
+        """Codifica a senha da Unimed usando base64 para armazenamento local"""
+        if not password:
+            return ""
+        # Adiciona um salt simples baseado no username da Unimed para ofuscar melhor
+        unimed_user = self.unimed_user.get().strip()
+        salt = f"{unimed_user}_unimed_salt"
+        password_with_salt = f"{password}_{salt}"
+        return base64.b64encode(password_with_salt.encode('utf-8')).decode('utf-8')
+
+    def _decode_unimed_password(self, encoded_password):
+        """Decodifica a senha da Unimed armazenada"""
+        if not encoded_password:
+            return ""
+        try:
+            decoded = base64.b64decode(encoded_password.encode('utf-8')).decode('utf-8')
+            # Remove o salt
+            unimed_user = self.unimed_user.get().strip()
+            salt = f"{unimed_user}_unimed_salt"
+            if decoded.endswith(f"_{salt}"):
+                return decoded[:-len(f"_{salt}")]
+            return decoded
+        except:
+            return ""
+
     def clear_logs(self):
         self.log_text.delete(1.0, tk.END)
 
@@ -465,12 +500,20 @@ class MainWindow:
             if os.path.exists(CONFIG_FILE):
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
+                
+                # Limpar credenciais do Pathoweb
                 config.pop('last_username', None)
                 config.pop('last_password', None)
                 config['save_credentials'] = False
+                
+                # Limpar credenciais da Unimed
+                config.pop('last_unimed_username', None)
+                config.pop('last_unimed_password', None)
+                config['save_unimed_credentials'] = False
+                
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump(config, f, indent=2)
-                self.log("Credenciais salvas foram removidas", "INFO")
+                self.log("Todas as credenciais salvas foram removidas", "INFO")
         except Exception as e:
             self.log(f"Erro ao limpar credenciais salvas: {e}", "ERROR")
 
@@ -490,6 +533,8 @@ Os módulos serão implementados gradualmente.
             if os.path.exists(CONFIG_FILE):
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
+                    
+                    # Carregar credenciais do Pathoweb
                     last_user = config.get('last_username', '')
                     last_password_encoded = config.get('last_password', '')
                     save_credentials = config.get('save_credentials', False)
@@ -500,6 +545,18 @@ Os módulos serão implementados gradualmente.
                         decoded_password = self._decode_password(last_password_encoded)
                         self.password.set(decoded_password)
                     self.save_credentials.set(save_credentials)
+                    
+                    # Carregar credenciais da Unimed
+                    last_unimed_user = config.get('last_unimed_username', '')
+                    last_unimed_password_encoded = config.get('last_unimed_password', '')
+                    save_unimed_credentials = config.get('save_unimed_credentials', False)
+                    
+                    if last_unimed_user:
+                        self.unimed_user.set(last_unimed_user)
+                    if last_unimed_password_encoded and save_unimed_credentials:
+                        decoded_unimed_password = self._decode_unimed_password(last_unimed_password_encoded)
+                        self.unimed_password.set(decoded_unimed_password)
+                    self.save_unimed_credentials.set(save_unimed_credentials)
         except Exception as e:
             self.log(f"Erro ao carregar credenciais salvas: {e}", "ERROR")
 
@@ -510,7 +567,7 @@ Os módulos serão implementados gradualmente.
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
             
-            # Sempre salva o usuário
+            # Sempre salva o usuário do Pathoweb
             config['last_username'] = self.username.get().strip()
             
             # Salva senha e opção apenas se o usuário escolheu salvar credenciais
@@ -521,6 +578,20 @@ Os módulos serão implementados gradualmente.
                 # Remove senha salva se usuário desabilitou a opção
                 config.pop('last_password', None)
             
+            # Salvar credenciais da Unimed
+            unimed_user = self.unimed_user.get().strip()
+            if unimed_user:
+                config['last_unimed_username'] = unimed_user
+            
+            config['save_unimed_credentials'] = self.save_unimed_credentials.get()
+            if self.save_unimed_credentials.get():
+                unimed_pass = self.unimed_password.get().strip()
+                if unimed_pass:
+                    config['last_unimed_password'] = self._encode_unimed_password(unimed_pass)
+            else:
+                # Remove senha da Unimed salva se usuário desabilitou a opção
+                config.pop('last_unimed_password', None)
+            
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
         except Exception as e:
@@ -528,9 +599,15 @@ Os módulos serão implementados gradualmente.
 
     def on_save_credentials_changed(self):
         if self.save_credentials.get():
-            self.log("Credenciais serão salvas localmente", "INFO")
+            self.log("Credenciais Pathoweb serão salvas localmente", "INFO")
         else:
-            self.log("Credenciais não serão salvas localmente", "INFO")
+            self.log("Credenciais Pathoweb não serão salvas localmente", "INFO")
+
+    def on_save_unimed_credentials_changed(self):
+        if self.save_unimed_credentials.get():
+            self.log("Credenciais Unimed serão salvas localmente", "INFO")
+        else:
+            self.log("Credenciais Unimed não serão salvas localmente", "INFO")
 
     def on_closing(self):
         if self.username.get().strip():

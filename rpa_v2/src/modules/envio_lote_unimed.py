@@ -1,6 +1,7 @@
 import os
 import time
 import zipfile
+import traceback
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -224,34 +225,163 @@ class XMLGeneratorAutomation(BaseModule):
         return arquivos_extraidos
 
     def processar_download_completo(self):
-        self.clicar_botao_situacao_faturamento()
-        arquivo_baixado = self.aguardar_download_completar()
-        if not arquivo_baixado:
-            log_message("Nenhum arquivo baixado para processar.", "ERROR")
-            return []
-        arquivos_finais = self.extrair_arquivo_zip(arquivo_baixado)
-        return arquivos_finais
+        try:
+            log_message("→ Clicando no botão de download do lote...", "INFO")
+            self.clicar_botao_situacao_faturamento()
+            
+            log_message("→ Aguardando download completar...", "INFO")
+            arquivo_baixado = self.aguardar_download_completar()
+            
+            if not arquivo_baixado:
+                log_message("❌ Nenhum arquivo baixado para processar.", "ERROR")
+                return []
+            
+            log_message(f"✅ Arquivo baixado: {os.path.basename(arquivo_baixado)}", "SUCCESS")
+            
+            log_message("→ Extraindo arquivo ZIP (se necessário)...", "INFO")
+            arquivos_finais = self.extrair_arquivo_zip(arquivo_baixado)
+            
+            log_message(f"✅ {len(arquivos_finais)} arquivo(s) pronto(s) para envio", "SUCCESS")
+            return arquivos_finais
+        except Exception as e:
+            erro_download = traceback.format_exc()
+            log_message(f"❌ Erro ao processar download:", "ERROR")
+            log_message(f"Detalhes: {str(e)}", "ERROR")
+            log_message(f"Stack trace:\n{erro_download}", "ERROR")
+            raise
 
     def configurar_filtros_e_pesquisar(self):
-        self.configurar_filtro_convenio_unimed()
-        time.sleep(1)
-        self.configurar_filtro_conferido_online()
-        self.executar_pesquisa_faturamento()
-        self.aguardar_finalizacao_pesquisa()
-        time.sleep(1)
+        try:
+            log_message("→ Configurando filtro de convênio Unimed...", "INFO")
+            self.configurar_filtro_convenio_unimed()
+            time.sleep(1)
+            
+            log_message("→ Configurando filtro 'Conferido Online'...", "INFO")
+            self.configurar_filtro_conferido_online()
+            
+            log_message("→ Executando pesquisa de faturamento...", "INFO")
+            self.executar_pesquisa_faturamento()
+            
+            log_message("→ Aguardando finalização da pesquisa...", "INFO")
+            self.aguardar_finalizacao_pesquisa()
+            time.sleep(1)
+            
+            log_message("✅ Filtros configurados e pesquisa concluída", "SUCCESS")
+        except Exception as e:
+            erro_filtros = traceback.format_exc()
+            log_message(f"❌ Erro ao configurar filtros:", "ERROR")
+            log_message(f"Detalhes: {str(e)}", "ERROR")
+            log_message(f"Stack trace:\n{erro_filtros}", "ERROR")
+            raise
 
     def enviar_para_unimed(self, arquivos_extraidos, unimed_user, unimed_pass):
-        uploader = UnimedUploader(unimed_user, unimed_pass, self.driver)
-        uploader.inicializar_driver()
-        uploader.fazer_login()
-        uploader.acessar_url_pos_login("https://webmed.unimedlondrina.com.br/prestador/uploadTiss.php")
-        uploader.selecionar_versao_upload()
-        for arquivo in arquivos_extraidos:
-            if arquivo.lower().endswith(".xml"):
-                uploader.selecionar_arquivo_upload(arquivo)
-                uploader.clicar_enviar_upload()
-                log_message(f"Arquivo {arquivo} enviado para Unimed.", "SUCCESS")
-        #uploader.fechar()
+        try:
+            log_message("Iniciando processo de upload para Unimed...", "INFO")
+            uploader = UnimedUploader(unimed_user, unimed_pass, self.driver)
+            
+            log_message("Inicializando driver para Unimed...", "INFO")
+            uploader.inicializar_driver()
+            
+            log_message("Fazendo login na Unimed...", "INFO")
+            uploader.fazer_login()
+            
+            log_message("Acessando página de upload TISS...", "INFO")
+            uploader.acessar_url_pos_login("https://webmed.unimedlondrina.com.br/prestador/uploadTiss.php")
+            
+            log_message("Selecionando versão do upload...", "INFO")
+            uploader.selecionar_versao_upload()
+            
+            for idx, arquivo in enumerate(arquivos_extraidos, 1):
+                if arquivo.lower().endswith(".xml"):
+                    log_message(f"Enviando arquivo {idx}/{len(arquivos_extraidos)}: {os.path.basename(arquivo)}", "INFO")
+                    uploader.selecionar_arquivo_upload(arquivo)
+                    uploader.clicar_enviar_upload()
+                    log_message(f"Arquivo {arquivo} enviado para Unimed.", "SUCCESS")
+            
+            log_message("Todos os arquivos foram enviados com sucesso!", "SUCCESS")
+            #uploader.fechar()
+        except Exception as e:
+            erro_upload = traceback.format_exc()
+            log_message(f"❌ Erro durante upload para Unimed:", "ERROR")
+            log_message(f"Tipo: {type(e).__name__}", "ERROR")
+            log_message(f"Mensagem: {str(e)}", "ERROR")
+            log_message(f"Stack trace:\n{erro_upload}", "ERROR")
+            raise
+
+    def executar_processo_completo_sem_login(self, unimed_user, unimed_pass, cancel_flag=None):
+        """
+        Executa o processo completo de geração e envio do XML reutilizando o driver já aberto.
+        Não faz login novamente, assume que o driver já está autenticado no Pathoweb.
+        """
+        try:
+            log_message("🔄 Continuando no navegador já autenticado...", "INFO")
+            
+            # O driver e wait já foram configurados externamente
+            if not self.driver or not self.wait:
+                raise Exception("Driver ou Wait não foram configurados!")
+            
+            log_message("Verificando URL atual...", "INFO")
+            current_url = self.driver.current_url
+            log_message(f"URL atual: {current_url}", "INFO")
+            
+            # Verificar se está no módulo de faturamento
+            if "moduloFaturamento" not in current_url:
+                log_message("⚠️ Não está no módulo de faturamento. Navegando...", "WARNING")
+                self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                time.sleep(3)
+            else:
+                log_message("✅ Já está no módulo de faturamento", "SUCCESS")
+            
+            # Limpar possíveis modais que podem estar abertos
+            log_message("Limpando possíveis modais abertos...", "INFO")
+            self.driver.execute_script("""
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.classList.remove('show', 'fade', 'in');
+                    modal.style.display = 'none';
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            """)
+            time.sleep(1)
+            
+            self.fechar_modal_se_necessario()
+            
+            log_message("Navegando para 'Preparar exames para fatura'...", "INFO")
+            # Navegar diretamente para evitar problemas com cliques
+            self.driver.get("https://pathoweb.com.br/moduloFaturamento/faturamento")
+            time.sleep(2)
+            
+            log_message("Configurando filtros e executando pesquisa...", "INFO")
+            self.configurar_filtros_e_pesquisar()
+            
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                return False
+            
+            arquivos_extraidos = self.processar_download_completo()
+            if not arquivos_extraidos:
+                log_message("Nenhum arquivo extraído para envio.", "ERROR")
+                return False
+            
+            self.arquivos_extraidos = arquivos_extraidos
+            
+            if cancel_flag and cancel_flag.is_set():
+                log_message("Execução cancelada pelo usuário.", "WARNING")
+                return False
+            
+            self.enviar_para_unimed(arquivos_extraidos, unimed_user, unimed_pass)
+            log_message("Processo concluído com sucesso!", "SUCCESS")
+            return True
+            
+        except Exception as e:
+            erro_completo = traceback.format_exc()
+            log_message(f"❌ Erro durante a automação de envio Unimed:", "ERROR")
+            log_message(f"Tipo do erro: {type(e).__name__}", "ERROR")
+            log_message(f"Mensagem: {str(e)}", "ERROR")
+            log_message(f"Stack trace completo:\n{erro_completo}", "ERROR")
+            return False
 
     def executar_processo_completo_login_navegacao(self, unimed_user, unimed_pass, cancel_flag=None):
         try:
@@ -316,7 +446,11 @@ class XMLGeneratorAutomation(BaseModule):
             self.fechar_navegador()
             return True
         except Exception as e:
-            log_message(f"Erro durante a automação: {e}", "ERROR")
+            erro_completo = traceback.format_exc()
+            log_message(f"❌ Erro durante a automação de envio Unimed:", "ERROR")
+            log_message(f"Tipo do erro: {type(e).__name__}", "ERROR")
+            log_message(f"Mensagem: {str(e)}", "ERROR")
+            log_message(f"Stack trace completo:\n{erro_completo}", "ERROR")
             self.fechar_navegador()
             return False
 
