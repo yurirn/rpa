@@ -28,16 +28,52 @@ class MacroGastricaModule(BaseModule):
             data_fixacao = None
             responsavel_macro_valor = None
 
+            # Ler cabeçalho (linha 1) e criar mapeamento de colunas
+            colunas = {}
+            for col_idx in range(1, sheet.max_column + 1):
+                cell_value = sheet.cell(row=1, column=col_idx).value
+                if cell_value:
+                    # Normalizar nome da coluna (minúsculo, sem espaços extras)
+                    nome_coluna = str(cell_value).strip().lower()
+                    colunas[nome_coluna] = col_idx
+            
+            log_message(f"📋 Colunas detectadas: {list(colunas.keys())}", "INFO")
+            
+            # Mapear nomes possíveis para cada campo (flexível)
+            def encontrar_coluna(nomes_possiveis):
+                """Encontra a coluna baseado em uma lista de nomes possíveis"""
+                for nome in nomes_possiveis:
+                    for coluna_nome, col_idx in colunas.items():
+                        if nome.lower() in coluna_nome:
+                            return col_idx
+                return None
+            
+            # Encontrar índices das colunas
+            col_codigo = encontrar_coluna(['codigo', 'código', 'cod', 'num_exame', 'numero', 'número'])
+            col_mascara = encontrar_coluna(['mascara', 'máscara', 'mask'])
+            col_responsavel = encontrar_coluna(['responsavel', 'responsável', 'resp', 'macroscopista'])
+            col_campo_d = encontrar_coluna(['fragmentos', 'quantidade', 'qtd_frag', 'qtd', 'campo d', 'd'])
+            col_campo_e = encontrar_coluna(['medida 1', 'med1', 'medida1', 'md1', 'campo e', 'e'])
+            col_campo_f = encontrar_coluna(['medida 2', 'med2', 'medida2', 'md2', 'campo f', 'f'])
+            col_campo_g = encontrar_coluna(['medida 3', 'med3', 'medida3', 'md3', 'campo g', 'g'])
+            col_data = encontrar_coluna(['data', 'data fixacao', 'data fixação', 'datafixacao'])
+            
+            # Validar colunas obrigatórias
+            if not col_codigo:
+                raise Exception("Coluna de código não encontrada! Use um nome como 'Código' ou 'Codigo'")
+            
+            log_message(f"✅ Mapeamento: Código=col{col_codigo}, Máscara=col{col_mascara}, Data=col{col_data}", "INFO")
+
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
-                codigo = sheet[f'A{row}'].value
-                mascara = sheet[f'B{row}'].value
-                responsavel_macro = sheet[f'C{row}'].value
-                campo_d = sheet[f'D{row}'].value  # Campo 182 (número de fragmentos)
-                campo_e = sheet[f'E{row}'].value  # Campo 200 (medida 1)
-                campo_f = sheet[f'F{row}'].value  # Campo 209 (medida 2)
-                campo_g = sheet[f'G{row}'].value  # Campo 218 (medida 3)
-                data_col = sheet[f'L{row}'].value  # Coluna L: data de fixação
+                codigo = sheet.cell(row=row, column=col_codigo).value if col_codigo else None
+                mascara = sheet.cell(row=row, column=col_mascara).value if col_mascara else None
+                responsavel_macro = sheet.cell(row=row, column=col_responsavel).value if col_responsavel else None
+                campo_d = sheet.cell(row=row, column=col_campo_d).value if col_campo_d else None
+                campo_e = sheet.cell(row=row, column=col_campo_e).value if col_campo_e else None
+                campo_f = sheet.cell(row=row, column=col_campo_f).value if col_campo_f else None
+                campo_g = sheet.cell(row=row, column=col_campo_g).value if col_campo_g else None
+                data_col = sheet.cell(row=row, column=col_data).value if col_data else None
 
                 if row == 2 and data_col:
                     data_fixacao = str(data_col).strip()
@@ -308,8 +344,8 @@ class MacroGastricaModule(BaseModule):
         log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "SUCCESS")
         time.sleep(0.5)
 
-    def abrir_modal_variaveis_e_preencher(self, driver, wait, campo_d, campo_e, campo_f, campo_g):
-        """Abre o modal de variáveis e preenche os campos"""
+    def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g):
+        """Abre o modal de variáveis e preenche os campos baseado na máscara"""
         try:
             # Clicar no botão "Pesquisar variáveis (F7)"
             botao_variaveis = wait.until(
@@ -345,17 +381,50 @@ class MacroGastricaModule(BaseModule):
             campos_input = driver.find_elements(By.CSS_SELECTOR, "input[style*='width: 100px'][style*='color: red']")
             log_message(f"🔍 Encontrados {len(campos_input)} campos de input no modal", "INFO")
             
-            # Mapear valores para os campos na ordem que aparecem
-            if str(campo_d).strip() == "6":
-                valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+            # Determinar valores baseado na máscara
+            mascara_upper = mascara.upper() if mascara else ""
+            valores = []
+            
+            if mascara_upper in ['VBSEM', 'VBCOM']:
+                # med1, med2, med3 e tamanho da parede (na quantidade de fragmentos)
+                valores = [campo_e, campo_f, campo_g, campo_d]
+                
+            elif mascara_upper == 'APC':
+                # med1 e med2 sem med3
+                valores = [campo_e, campo_f]
+                
+            elif mascara_upper == 'COLO':
+                # Variável selecionável (mult), quantidade, med1, med2, med3, Variável e quantidade na legenda
+                if str(campo_d).strip().lower() == 'mult':
+                    valores = ["Múltiplos", campo_d, campo_e, campo_f, campo_g, "M", campo_d]
+                else:
+                    valores = [campo_d, campo_d, campo_e, campo_f, campo_g, campo_d, campo_d]
+                    
+            elif mascara_upper in ['RTU-FIT', 'RTU-FIP']:
+                # peso (campo_d), med1, med2, med3 - PESO VEM PRIMEIRO!
+                valores = [campo_d, campo_e, campo_f, campo_g]
+                
+            elif mascara_upper in ['HEMO-FIT', 'HEMO-FIP']:
+                # Quantidade, med1, med2, med3 e quantidade na legenda igual a da macro
+                if str(campo_d).strip().lower() == 'mult':
+                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+                else:
+                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]
+                    
             else:
-                valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
+                # Padrão original (máscaras antigas)
+                if str(campo_d).strip() == "6":
+                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+                else:
+                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
 
-            for i, campo in enumerate(campos_input[:5]):  # Limitar aos 5 primeiros campos
+            log_message(f"📋 Preenchendo variáveis para máscara '{mascara}': {valores}", "INFO")
+            
+            for i, campo in enumerate(campos_input[:len(valores)]):  # Limitar ao número de valores
                 if i < len(valores) and valores[i]:
                     try:
                         campo.clear()
-                        campo.send_keys(valores[i])
+                        campo.send_keys(str(valores[i]))
                         log_message(f"✍️ Campo {i+1} preenchido com: {valores[i]}", "SUCCESS")
                     except Exception as e:
                         log_message(f"⚠️ Erro ao preencher campo {i+1}: {e}", "WARNING")
@@ -416,14 +485,31 @@ class MacroGastricaModule(BaseModule):
             log_message("⚠️ Nenhuma máscara fornecida para definir grupo", "WARNING")
             return
 
-        mascaras_estomago = ['A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'DUO ', 'ESOFF', 'GASTRICA', 'POLIPO', 'G/POLIPO', 'ULCERA']
+        mascaras_estomago = ['A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'DUO', 'DUO ', 'ESOFF', 'GASTRICA', 'POLIPO', 'G/POLIPO', 'ULCERA']
         mascaras_intestino = ['B/COLON', 'ICR', 'P/COLON']
+        mascaras_vesicula = ['VBSEM', 'VBCOM']
+        mascaras_apendice = ['APC']
+        mascaras_prostata = ['RTU-FIT', 'RTU-FIP']
+        mascaras_geral = ['HEMO-FIT', 'HEMO-FIP']
+        mascaras_utero = ['COLO']
 
         grupo_selecionado = None
-        if mascara.upper() in mascaras_estomago:
+        mascara_upper = mascara.upper()
+        
+        if mascara_upper in mascaras_estomago:
             grupo_selecionado = "Estomago"
-        elif mascara.upper() in mascaras_intestino:
+        elif mascara_upper in mascaras_intestino:
             grupo_selecionado = "Intestino"
+        elif mascara_upper in mascaras_vesicula:
+            grupo_selecionado = "Vesicula biliar"
+        elif mascara_upper in mascaras_apendice:
+            grupo_selecionado = "Apendice"
+        elif mascara_upper in mascaras_prostata:
+            grupo_selecionado = "Prostata"
+        elif mascara_upper in mascaras_geral:
+            grupo_selecionado = "Geral"
+        elif mascara_upper in mascaras_utero:
+            grupo_selecionado = "Utero"
         else:
             log_message(f"⚠️ Máscara '{mascara}' não encontrada nas regras definidas", "WARNING")
             return
@@ -664,8 +750,16 @@ class MacroGastricaModule(BaseModule):
                 'ICR': 'ICR: Íleo/Cólon/Reto',
                 'DUO': 'Duodeno: Duodeno',
                 'ULCERA': 'UG: Úlcera Gastrica',
+                'VBSEM': 'VB: Vesicula biliar',
+                'VBCOM': 'VB: Vesicula biliar',
+                'APC': 'APC: Apendice cecal',
+                'RTU-FIT': 'RTU: Resseccao transuretral',
+                'RTU-FIP': 'RTU: Resseccao transuretral',
+                'HEMO-FIT': 'HEMO: Hemorroida',
+                'HEMO-FIP': 'HEMO: Hemorroida',
             }
-            mascaras_sem_regiao = ['B/COLON', 'P/COLON']
+            # COLO e outras máscaras sem região definida (região em branco ou manual)
+            mascaras_sem_regiao = ['B/COLON', 'P/COLON', 'COLO']
 
             mascara_upper = mascara.upper().replace('Ó', 'O').replace('Ô', 'O')
             mascara_map = {k.upper().replace('Ó', 'O').replace('Ô', 'O'): v for k, v in mascara_regiao.items()}
@@ -762,15 +856,49 @@ class MacroGastricaModule(BaseModule):
         except Exception as e:
             log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
-    def definir_quantidade_fragmentos(self, driver, wait, campo_d):
+    def obter_padrao_fragmentos_blocos(self, mascara):
+        """Retorna os padrões de fragmentos e blocos para cada tipo de máscara"""
+        mascara_upper = mascara.upper() if mascara else ""
+        
+        # Padrões: (fragmentos_padrao, blocos_padrao, usar_sempre_padrao)
+        # usar_sempre_padrao=True significa que IGNORA o valor da planilha
+        padroes = {
+            'VBSEM': (3, 1, True),      # Sempre 3F1B
+            'VBCOM': (3, 1, True),      # Sempre 3F1B
+            'APC': (3, 1, True),        # Sempre 3F1B
+            'COLO': (None, 1, False),   # Quantidade variável da planilha, 1 bloco
+            'RTU-FIT': (6, 1, True),    # Sempre 6 (múltiplos) 1B - campo_d vai para peso
+            'RTU-FIP': (6, 1, True),    # Sempre 6 (múltiplos) 1B - campo_d vai para peso
+            'HEMO-FIT': (None, 1, False),  # Quantidade variável da planilha, 1 bloco
+            'HEMO-FIP': (None, 1, False),  # Quantidade variável da planilha, 1 bloco
+        }
+        
+        return padroes.get(mascara_upper, (None, 1, False))
+    
+    def definir_quantidade_fragmentos(self, driver, wait, mascara, campo_d):
         """Define a quantidade de fragmentos usando JavaScript melhorado"""
         try:
-            if not campo_d or campo_d.strip() == "":
-                log_message("⚠️ Campo D está vazio, não definindo quantidade", "WARNING")
+            # Obter padrão da máscara
+            fragmentos_padrao, _, usar_sempre_padrao = self.obter_padrao_fragmentos_blocos(mascara)
+            
+            # Determinar quantidade a usar
+            if usar_sempre_padrao and fragmentos_padrao:
+                # Para RTU, VBSEM, VBCOM, APC: SEMPRE usar o padrão, ignorar planilha
+                quantidade_valor = str(fragmentos_padrao)
+                log_message(f"📝 Usando padrão FIXO de {fragmentos_padrao} fragmentos para '{mascara}' (ignora planilha)", "INFO")
+            elif campo_d and campo_d.strip():
+                # Para outras máscaras: usar valor da planilha se existir
+                quantidade_valor = campo_d.strip()
+                log_message(f"📝 Usando quantidade da planilha: {quantidade_valor}", "INFO")
+            elif fragmentos_padrao:
+                # Fallback: usar padrão se planilha estiver vazia
+                quantidade_valor = str(fragmentos_padrao)
+                log_message(f"📝 Campo D vazio, usando padrão de {fragmentos_padrao} fragmentos para '{mascara}'", "INFO")
+            else:
+                log_message("⚠️ Campo D está vazio e não há padrão, não definindo quantidade", "WARNING")
                 return
 
-            quantidade_valor = campo_d.strip()
-            log_message(f"📝 Definindo quantidade de fragmentos como: {quantidade_valor}", "INFO")
+            log_message(f"✅ Definindo quantidade de fragmentos como: {quantidade_valor}", "INFO")
 
             # Procurar pelos campos de quantidade na tabela de fragmentos
             script = """
@@ -1101,7 +1229,7 @@ class MacroGastricaModule(BaseModule):
 
             # 4. Definir quantidade de fragmentos (campo D)
             try:
-                self.definir_quantidade_fragmentos(driver, wait, campo_d)
+                self.definir_quantidade_fragmentos(driver, wait, mascara, campo_d)
                 self.aguardar_pagina_estavel(driver, wait, timeout=3)
             except Exception as e:
                 log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
@@ -1494,8 +1622,8 @@ class MacroGastricaModule(BaseModule):
             # 1. Selecionar responsável pela macroscopia
             self.selecionar_responsavel_macroscopia(driver, wait, responsavel_macro)
 
-            # 2. Selecionar Renata como Auxiliar da Macroscopia
-            self.selecionar_auxiliar_macroscopia(driver, wait)
+            # 2. Auxiliar da Macroscopia - não precisa alterar, já vem preenchido no login
+            # self.selecionar_auxiliar_macroscopia(driver, wait)  # COMENTADO - campo já vem preenchido automaticamente
             
             # 3. Definir data de fixação correta
             self.definir_data_fixacao(driver, wait, data_fixacao)
@@ -1511,7 +1639,7 @@ class MacroGastricaModule(BaseModule):
             
             # 6. Abrir modal de variáveis e preencher campos (opcional)
             try:
-                self.abrir_modal_variaveis_e_preencher(driver, wait, campo_d, campo_e, campo_f, campo_g)
+                self.abrir_modal_variaveis_e_preencher(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g)
             except Exception as var_error:
                 log_message(f"⚠️ Erro no modal de variáveis: {var_error}", "WARNING")
                 log_message("⚠️ Continuando o processo sem as variáveis", "WARNING")

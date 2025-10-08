@@ -20,7 +20,8 @@ class UnimedUploader(BaseModule):
         super().__init__(nome="Envio Lote Unimed")
         self.username = username
         self.password = password
-        self.timeout = timeout
+        # Timeout maior em headless para evitar crashes
+        self.timeout = 60 if headless else timeout
         self.driver = driver
         self.wait = None
         self.headless = headless
@@ -29,6 +30,9 @@ class UnimedUploader(BaseModule):
         if self.driver is None:
             log_message("Inicializando driver do Chrome para upload Unimed...", "INFO")
             self.driver = BrowserFactory.create_chrome(headless=self.headless)
+            # Configurar timeouts do driver
+            self.driver.set_page_load_timeout(120)
+            self.driver.set_script_timeout(60)
         self.wait = WebDriverWait(self.driver, self.timeout)
 
     def fazer_login(self):
@@ -85,7 +89,8 @@ class XMLGeneratorAutomation(BaseModule):
         super().__init__(nome="Geração e Envio XML Unimed")
         self.username = username
         self.password = password
-        self.timeout = timeout
+        # Timeout maior em headless para evitar crashes
+        self.timeout = 60 if headless else timeout
         self.driver = None
         self.wait = None
         self.arquivos_extraidos = []
@@ -101,6 +106,9 @@ class XMLGeneratorAutomation(BaseModule):
     def inicializar_driver(self):
         log_message("Inicializando driver do Chrome para Pathoweb...", "INFO")
         self.driver = BrowserFactory.create_chrome(download_dir=self.pasta_download, headless=self.headless_mode)
+        # Configurar timeouts do driver para evitar GetHandleVerifier errors
+        self.driver.set_page_load_timeout(120)
+        self.driver.set_script_timeout(60)
         self.wait = WebDriverWait(self.driver, self.timeout)
 
     def fazer_login(self):
@@ -144,17 +152,55 @@ class XMLGeneratorAutomation(BaseModule):
 
     def configurar_filtro_convenio_unimed(self):
         log_message("Selecionando convênio UNIMED (LONDRINA)...", "INFO")
-        select2_container = self.wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".select2-selection[aria-labelledby*='convenioId']"))
-        )
-        select2_container.click()
-        time.sleep(1)
-        opcao_unimed = self.wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//li[contains(@class, 'select2-results__option') and text()='UNIMED (LONDRINA)']"))
-        )
-        opcao_unimed.click()
-        time.sleep(1)
+        
+        # Tentar múltiplas vezes se necessário
+        max_tentativas = 3
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                # Verificar se o driver ainda está vivo
+                try:
+                    _ = self.driver.current_url
+                except Exception as e:
+                    raise Exception(f"Driver perdeu conexão: {e}")
+                
+                # Aguardar mais tempo em headless
+                tempo_espera = 2 if self.headless_mode else 1
+                time.sleep(tempo_espera)
+                
+                # Aguardar especificamente pelo select2 do convênio
+                log_message(f"Aguardando elemento do convênio (tentativa {tentativa}/{max_tentativas})...", "INFO")
+                timeout_wait = 30 if self.headless_mode else 20
+                select2_container = WebDriverWait(self.driver, timeout_wait).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, ".select2-selection[aria-labelledby*='convenioId']"))
+                )
+                
+                # Scroll até o elemento para garantir que está visível
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", select2_container)
+                time.sleep(0.5)
+                
+                # Clicar no select2
+                select2_container.click()
+                time.sleep(1.5 if self.headless_mode else 1)
+                
+                # Aguardar e selecionar a opção UNIMED
+                opcao_unimed = WebDriverWait(self.driver, 15).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, "//li[contains(@class, 'select2-results__option') and text()='UNIMED (LONDRINA)']"))
+                )
+                opcao_unimed.click()
+                time.sleep(1.5 if self.headless_mode else 1)
+                
+                log_message("✅ Convênio UNIMED selecionado com sucesso!", "SUCCESS")
+                return
+                
+            except Exception as e:
+                log_message(f"⚠️ Tentativa {tentativa} falhou: {str(e)}", "WARNING")
+                if tentativa < max_tentativas:
+                    log_message("🔄 Tentando novamente...", "INFO")
+                    time.sleep(3 if self.headless_mode else 2)
+                else:
+                    log_message("❌ Não foi possível selecionar o convênio após múltiplas tentativas", "ERROR")
+                    raise
 
     def configurar_filtro_conferido_online(self):
         log_message("Selecionando filtro 'Conferido Online'...", "INFO")
@@ -171,38 +217,95 @@ class XMLGeneratorAutomation(BaseModule):
 
     def aguardar_finalizacao_pesquisa(self):
         log_message("Aguardando finalização da pesquisa...", "INFO")
-        tempo_maximo = time.time() + 60
+        # Timeout maior em headless
+        timeout_pesquisa = 120 if self.headless_mode else 60
+        tempo_maximo = time.time() + timeout_pesquisa
+        
         while time.time() < tempo_maximo:
             try:
+                # Verificar se o driver ainda está vivo
+                _ = self.driver.current_url
+                
                 modal_carregando = self.driver.find_element(By.XPATH,
                                                             "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
                 if modal_carregando.is_displayed():
-                    time.sleep(1)
+                    time.sleep(2 if self.headless_mode else 1)
                 else:
+                    log_message("✅ Modal fechado, pesquisa finalizada", "SUCCESS")
                     return
             except Exception:
+                # Modal não encontrado ou já fechou
+                log_message("✅ Pesquisa finalizada (modal não encontrado)", "SUCCESS")
                 return
+        
+        log_message("⚠️ Timeout ao aguardar finalização da pesquisa", "WARNING")
 
     def clicar_botao_situacao_faturamento(self):
         log_message("Clicando para baixar o lote XML...", "INFO")
-        botao = self.wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']"))
-        )
-        botao.click()
+        
+        try:
+            # Aguardar botão estar presente e visível
+            botao = self.wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']"))
+            )
+            
+            # Scroll até o botão para garantir que está visível
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao)
+            time.sleep(0.5)
+            
+            # Clicar no botão
+            botao.click()
+            log_message("✅ Botão de download clicado com sucesso", "SUCCESS")
+            
+            # Aguardar um momento para o download iniciar
+            time.sleep(2)
+            
+        except Exception as e:
+            log_message(f"❌ Erro ao clicar no botão de download: {e}", "ERROR")
+            raise
 
-    def aguardar_download_completar(self, timeout_download=150):
-        log_message("Aguardando download do arquivo XML/ZIP...", "INFO")
+    def aguardar_download_completar(self, timeout_download=None):
+        # Timeout maior em headless
+        if timeout_download is None:
+            timeout_download = 180 if self.headless_mode else 60
+            
+        log_message(f"Aguardando download do arquivo XML/ZIP (timeout: {timeout_download}s)...", "INFO")
+        log_message(f"📁 Pasta de download: {self.pasta_download}", "INFO")
+        
         arquivos_antes = set(os.listdir(self.pasta_download))
+        log_message(f"📋 Arquivos antes do download: {len(arquivos_antes)} arquivo(s)", "INFO")
+        
         tempo_limite = time.time() + timeout_download
+        tentativa = 0
+        
         while time.time() < tempo_limite:
+            try:
+                # Verificar se o driver ainda está vivo
+                _ = self.driver.current_url
+            except Exception as e:
+                log_message(f"⚠️ Driver pode ter crashado durante download: {e}", "WARNING")
+            
+            tentativa += 1
             arquivos_agora = set(os.listdir(self.pasta_download))
             novos_arquivos = arquivos_agora - arquivos_antes
+            
+            if tentativa % 5 == 0:  # Log a cada 10 segundos (5 tentativas * 2 segundos)
+                log_message(f"⏳ Aguardando download... ({tentativa * 2}s / {timeout_download}s)", "INFO")
+            
+            # Verificar se há arquivos .crdownload (download em andamento)
+            arquivos_em_download = [f for f in arquivos_agora if f.endswith('.crdownload')]
+            if arquivos_em_download:
+                log_message(f"📥 Download em andamento: {arquivos_em_download[0]}", "INFO")
+            
             for arquivo in novos_arquivos:
                 if arquivo.endswith(('.zip', '.xml', '.ZIP', '.XML')) and not arquivo.endswith('.crdownload'):
-                    log_message(f"Arquivo baixado: {arquivo}", "SUCCESS")
+                    log_message(f"✅ Arquivo baixado: {arquivo}", "SUCCESS")
                     return os.path.join(self.pasta_download, arquivo)
+            
             time.sleep(2)
-        log_message("Timeout ao aguardar download do arquivo.", "ERROR")
+        
+        log_message(f"❌ Timeout ao aguardar download após {timeout_download}s", "ERROR")
+        log_message(f"📋 Arquivos na pasta agora: {os.listdir(self.pasta_download)}", "ERROR")
         return None
 
     def extrair_arquivo_zip(self, caminho_zip):
@@ -252,6 +355,23 @@ class XMLGeneratorAutomation(BaseModule):
 
     def configurar_filtros_e_pesquisar(self):
         try:
+            # Limpar campos de pesquisa antes de configurar filtros
+            log_message("🧹 Limpando campos de pesquisa...", "INFO")
+            try:
+                # Limpar campo de número de exame
+                campo_exame = self.driver.find_element(By.ID, "numeroExame")
+                campo_exame.clear()
+                
+                # Limpar campo de número de guia
+                campo_guia = self.driver.find_element(By.ID, "numeroGuia")
+                campo_guia.clear()
+                
+                log_message("✅ Campos limpos com sucesso", "SUCCESS")
+            except Exception as e:
+                log_message(f"⚠️ Aviso ao limpar campos: {e}", "WARNING")
+            
+            time.sleep(0.5)
+            
             log_message("→ Configurando filtro de convênio Unimed...", "INFO")
             self.configurar_filtro_convenio_unimed()
             time.sleep(1)
@@ -308,6 +428,59 @@ class XMLGeneratorAutomation(BaseModule):
             log_message(f"Stack trace:\n{erro_upload}", "ERROR")
             raise
 
+    def verificar_carregamento_pagina(self, max_tentativas=3):
+        """Verifica se a página de faturamento carregou corretamente."""
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                log_message(f"🔍 Verificando carregamento da página (tentativa {tentativa}/{max_tentativas})...", "INFO")
+                
+                # Aguardar um pouco para a página começar a carregar
+                time.sleep(2)
+                
+                # Verificar se a página não está em branco
+                body_text = self.driver.execute_script("return document.body.innerText;")
+                if not body_text or len(body_text.strip()) < 50:
+                    log_message("⚠️ Página parece estar em branco, tentando recarregar...", "WARNING")
+                    self.driver.refresh()
+                    time.sleep(3)
+                    continue
+                
+                # Tentar clicar na aba "Pré faturamento e faturar" se existir
+                try:
+                    log_message("🔍 Procurando pela aba 'Pré faturamento e faturar'...", "INFO")
+                    aba_faturamento = self.driver.find_element(
+                        By.XPATH, "//a[contains(text(), 'Pré faturamento e faturar') or contains(text(), 'faturamento')]"
+                    )
+                    if aba_faturamento.is_displayed():
+                        log_message("✅ Aba encontrada, clicando...", "INFO")
+                        aba_faturamento.click()
+                        time.sleep(2)
+                except Exception as e:
+                    log_message(f"ℹ️ Aba não encontrada ou já está selecionada: {e}", "INFO")
+                
+                # Verificar se existe o formulário de pesquisa
+                form_exists = self.driver.execute_script("""
+                    return document.querySelector('#pesquisaFaturamento') !== null;
+                """)
+                
+                if form_exists:
+                    log_message("✅ Página de faturamento carregou corretamente!", "SUCCESS")
+                    return True
+                else:
+                    log_message("⚠️ Formulário de pesquisa não encontrado, recarregando...", "WARNING")
+                    self.driver.refresh()
+                    time.sleep(3)
+                    
+            except Exception as e:
+                log_message(f"⚠️ Erro ao verificar carregamento: {e}", "WARNING")
+                if tentativa < max_tentativas:
+                    log_message("🔄 Tentando recarregar a página...", "INFO")
+                    self.driver.refresh()
+                    time.sleep(3)
+        
+        log_message("❌ Página não carregou corretamente após múltiplas tentativas", "ERROR")
+        return False
+
     def executar_processo_completo_sem_login(self, unimed_user, unimed_pass, cancel_flag=None):
         """
         Executa o processo completo de geração e envio do XML reutilizando o driver já aberto.
@@ -332,26 +505,44 @@ class XMLGeneratorAutomation(BaseModule):
             else:
                 log_message("✅ Já está no módulo de faturamento", "SUCCESS")
             
-            # Limpar possíveis modais que podem estar abertos
-            log_message("Limpando possíveis modais abertos...", "INFO")
-            self.driver.execute_script("""
-                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                document.querySelectorAll('.modal').forEach(modal => {
-                    modal.classList.remove('show', 'fade', 'in');
-                    modal.style.display = 'none';
-                });
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            """)
-            time.sleep(1)
-            
+            # Fechar modal se necessário
             self.fechar_modal_se_necessario()
             
-            log_message("Navegando para 'Preparar exames para fatura'...", "INFO")
-            # Navegar diretamente para evitar problemas com cliques
-            self.driver.get("https://pathoweb.com.br/moduloFaturamento/faturamento")
-            time.sleep(2)
+            # Verificar se já está na página de faturamento
+            current_url = self.driver.current_url
+            log_message(f"🔍 Verificando URL para navegação: {current_url}", "INFO")
+            
+            # Verificar se já tem o formulário de pesquisa carregado (sinal que já está na página)
+            formulario_ja_presente = False
+            try:
+                formulario_ja_presente = self.driver.execute_script("""
+                    return document.querySelector('#pesquisaFaturamento') !== null;
+                """)
+            except:
+                pass
+            
+            if formulario_ja_presente and ("faturamento" in current_url.lower() or "preFaturamento" in current_url):
+                log_message("✅ Já está na página de preparação de exames com formulário carregado, pulando navegação...", "SUCCESS")
+            else:
+                log_message("Navegando para 'Preparar exames para fatura'...", "INFO")
+                try:
+                    # Tentar clicar no link em vez de navegar diretamente (melhor para apps AJAX)
+                    link_preparar = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//a[contains(@class, 'setupAjax') and contains(text(), 'Preparar exames para fatura')]"))
+                    )
+                    link_preparar.click()
+                    log_message("✅ Link clicado com sucesso", "SUCCESS")
+                    time.sleep(3)
+                except Exception as e:
+                    log_message(f"⚠️ Não foi possível clicar no link: {e}", "WARNING")
+                    log_message("Tentando navegação direta como fallback...", "INFO")
+                    self.driver.get("https://pathoweb.com.br/moduloFaturamento/faturamento")
+                    time.sleep(2)
+                
+                # Verificar se a página carregou corretamente
+                if not self.verificar_carregamento_pagina():
+                    raise Exception("Página de faturamento não carregou corretamente após múltiplas tentativas")
             
             log_message("Configurando filtros e executando pesquisa...", "INFO")
             self.configurar_filtros_e_pesquisar()

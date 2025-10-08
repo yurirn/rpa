@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 import time
-import traceback
 from tkinter import messagebox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -122,11 +121,6 @@ class PreparacaoLoteModule(BaseModule):
                 return True  # Continua para próxima aba
 
             log_message(f"📊 Aba {nome_aba}: {len(exames_unicos)} exames encontrados", "INFO")
-            
-            # Aguardar alguns segundos antes de processar (evitar bloqueio após múltiplos logins)
-            if idx_aba > 1:
-                log_message("⏳ Aguardando 3 segundos antes de iniciar nova aba...", "INFO")
-                time.sleep(3)
 
             # Executar processo completo para esta aba
             return self._executar_automacao_completa(
@@ -137,11 +131,7 @@ class PreparacaoLoteModule(BaseModule):
             )
 
         except Exception as e:
-            erro_completo = traceback.format_exc()
-            log_message(f"❌ Erro ao processar aba {nome_aba}:", "ERROR")
-            log_message(f"Tipo do erro: {type(e).__name__}", "ERROR")
-            log_message(f"Mensagem: {str(e)}", "ERROR")
-            log_message(f"Stack trace:\n{erro_completo}", "ERROR")
+            log_message(f"❌ Erro ao processar aba {nome_aba}: {e}", "ERROR")
             return False
 
     def _processar_aba_unica(self, excel_file, username, password, modo_busca,
@@ -170,68 +160,40 @@ class PreparacaoLoteModule(BaseModule):
         """Executa o processo completo de automação para uma lista de exames"""
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
         driver = BrowserFactory.create_chrome(headless=headless_mode)
-        wait = WebDriverWait(driver, 30)  # Aumentado de 15 para 30 segundos
+        wait = WebDriverWait(driver, 15)
         resultados = []
 
         try:
             log_message(f"🚀 Iniciando automação: {contexto}...", "INFO")
-            
-            # Tentativa de login com retry
-            max_tentativas_login = 3
-            login_sucesso = False
-            
-            for tentativa in range(1, max_tentativas_login + 1):
+            driver.get(url)
+            wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
+            driver.find_element(By.ID, "password").send_keys(password)
+            driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+
+            log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
+            current_url = driver.current_url
+
+            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+                log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
-                    log_message(f"🔐 Tentativa de login {tentativa}/{max_tentativas_login}...", "INFO")
-                    driver.get(url)
-                    time.sleep(2)  # Aguardar página carregar completamente
-                    
-                    wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
-                    driver.find_element(By.ID, "password").send_keys(password)
-                    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
-                    
-                    # Aguardar navegação pós-login com timeout maior
-                    time.sleep(3)
-                    
-                    log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
-                    current_url = driver.current_url
-
-                    if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
-                        log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
-                        try:
-                            modulo_link = wait.until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']")))
-                            modulo_link.click()
-                            time.sleep(3)
-                            log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
-                        except Exception as e:
-                            log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
-                            time.sleep(3)
-                            log_message("🔄 Navegação direta para módulo realizada", "INFO")
-
-                    elif "moduloFaturamento" in current_url:
-                        log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
-                    else:
-                        log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                        driver.get("https://pathoweb.com.br/moduloFaturamento/index")
-                        time.sleep(3)
-                        log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
-                    
-                    login_sucesso = True
-                    log_message("✅ Login realizado com sucesso", "SUCCESS")
-                    break
-                    
+                    modulo_link = wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']")))
+                    modulo_link.click()
+                    time.sleep(2)
+                    log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
-                    log_message(f"⚠️ Erro na tentativa {tentativa} de login: {e}", "WARNING")
-                    if tentativa < max_tentativas_login:
-                        log_message(f"⏳ Aguardando 5 segundos antes de tentar novamente...", "INFO")
-                        time.sleep(5)
-                    else:
-                        raise Exception(f"Falha no login após {max_tentativas_login} tentativas: {e}")
-            
-            if not login_sucesso:
-                raise Exception("Não foi possível realizar o login")
+                    log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
+                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    time.sleep(2)
+                    log_message("🔄 Navegação direta para módulo realizada", "INFO")
+
+            elif "moduloFaturamento" in current_url:
+                log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
+            else:
+                log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
+                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                time.sleep(2)
+                log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
             try:
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
@@ -253,40 +215,11 @@ class PreparacaoLoteModule(BaseModule):
                     break
                 try:
                     log_message(f"➡️ Processando {modo_busca}: {exame}", "INFO")
-                    
-                    # Limpeza agressiva de modals e backdrops
-                    driver.execute_script("""
-                        // Remover TODOS os backdrops
-                        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                        
-                        // Fechar TODOS os modais
-                        document.querySelectorAll('.modal').forEach(modal => {
-                            modal.classList.remove('show', 'fade', 'in');
-                            modal.style.display = 'none';
-                            modal.setAttribute('aria-hidden', 'true');
-                        });
-                        
-                        // Limpar classes do body
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                        document.body.style.paddingRight = '';
-                    """)
-                    time.sleep(0.5)
-                    
                     campo_id = "numeroGuia" if modo_busca == "guia" else "numeroExame"
                     campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
                     campo_exame.clear()
                     campo_exame.send_keys(exame)
-                    
-                    # Usar JavaScript para clicar no botão (contorna problemas de interceptação)
-                    wait.until(EC.presence_of_element_located((By.ID, "pesquisaFaturamento")))
-                    driver.execute_script("""
-                        const btn = document.getElementById('pesquisaFaturamento');
-                        if (btn) {
-                            btn.scrollIntoView({block: 'center'});
-                            btn.click();
-                        }
-                    """)
+                    wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento"))).click()
                     try:
                         modal_carregando = driver.find_element(By.XPATH,
                             "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
@@ -307,59 +240,11 @@ class PreparacaoLoteModule(BaseModule):
                         log_message(f"⚠️ Erro ao validar resultados da tabela: {e}", "WARNING")
                         resultados.append({"exame": exame, "status": "erro_validacao", "erro": str(e)})
                         continue
-                    
-                    # Verificar se todos os itens já estão marcados como "On-line"
-                    try:
-                        todos_online = driver.execute_script("""
-                            const rows = document.querySelectorAll('#tabelaPreFaturamentoTbody tr');
-                            if (rows.length === 0) return false;
-                            
-                            let todosOnline = true;
-                            rows.forEach(row => {
-                                // Buscar o select de conferência ou o texto "On-line"
-                                const selectConferido = row.querySelector('select[id*="faturamentoConferido"]');
-                                const textoOnline = row.querySelector('a.table-editable-ancora');
-                                
-                                if (selectConferido) {
-                                    const optionSelecionada = selectConferido.querySelector('option[selected]');
-                                    if (!optionSelecionada || optionSelecionada.value !== 'On-line') {
-                                        todosOnline = false;
-                                    }
-                                } else if (textoOnline) {
-                                    if (!textoOnline.textContent.includes('On-line')) {
-                                        todosOnline = false;
-                                    }
-                                } else {
-                                    todosOnline = false;
-                                }
-                            });
-                            
-                            return todosOnline;
-                        """)
-                        
-                        if todos_online:
-                            log_message(f"✅ {modo_busca.title()} {exame} já está On-line. Pulando...", "SUCCESS")
-                            resultados.append({"exame": exame, "status": "ja_online"})
-                            continue
-                    except Exception as e:
-                        log_message(f"⚠️ Erro ao verificar status Online: {e}. Continuando processamento...", "WARNING")
-                    
-                    # Clicar no checkbox via JavaScript para evitar interceptação
-                    wait.until(EC.presence_of_element_located((By.ID, "checkTodosPreFaturar")))
-                    driver.execute_script("document.getElementById('checkTodosPreFaturar').click();")
-                    time.sleep(0.5)
-                    
-                    # Clicar no botão Ações via JavaScript
-                    wait.until(EC.presence_of_element_located((
+                    wait.until(EC.element_to_be_clickable((By.ID, "checkTodosPreFaturar"))).click()
+                    acoes_btn = wait.until(EC.element_to_be_clickable((
                         By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
                     )))
-                    driver.execute_script("""
-                        const acoesBtn = document.querySelector("a.toggleMaisDeUm[href*='#']");
-                        if (acoesBtn) {
-                            acoesBtn.scrollIntoView({block: 'center'});
-                            acoesBtn.click();
-                        }
-                    """)
+                    acoes_btn.click()
                     time.sleep(1)
                     driver.execute_script("""
                         const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
@@ -378,58 +263,33 @@ class PreparacaoLoteModule(BaseModule):
                     resultados.append({"exame": exame, "status": "sucesso"})
                     log_message(f"✅ {modo_busca.title()} {exame} processado com sucesso.", "SUCCESS")
                 except Exception as e:
-                    erro_trace = traceback.format_exc()
                     resultados.append({"exame": exame, "status": "erro", "erro": str(e)})
-                    log_message(f"❌ Erro ao processar {exame}:", "ERROR")
-                    log_message(f"Detalhes: {str(e)}", "ERROR")
-                    log_message(f"Stack trace:\n{erro_trace}", "ERROR")
+                    log_message(f"❌ Erro ao processar {exame}: {e}", "ERROR")
 
             # Mostrar relatório de processamento
             total = len(resultados)
             sucesso = [r for r in resultados if r["status"] == "sucesso"]
-            ja_online = [r for r in resultados if r["status"] == "ja_online"]
             erro = [r for r in resultados if r["status"] == "erro"]
             sem_resultados = [r for r in resultados if r["status"] == "sem_resultados"]
             erro_validacao = [r for r in resultados if r["status"] == "erro_validacao"]
 
             log_message(f"\n📊 Resumo do processamento - {contexto}:", "INFO")
             log_message(f"Total: {total}", "INFO")
-            log_message(f"Processados com sucesso: {len(sucesso)}", "SUCCESS")
-            log_message(f"Já estavam On-line: {len(ja_online)}", "SUCCESS")
+            log_message(f"Sucesso: {len(sucesso)}", "SUCCESS")
             log_message(f"Sem resultados: {len(sem_resultados)}", "WARNING")
             log_message(f"Erro validação: {len(erro_validacao)}", "WARNING")
             log_message(f"Erro processamento: {len(erro)}", "ERROR")
 
             # Processa envio para Unimed se necessário
             if gera_xml_tiss == "sim":
-                try:
-                    # Aguardar alguns segundos para garantir que o sistema processou tudo
-                    log_message("⏳ Aguardando 5 segundos para garantir que dados foram salvos...", "INFO")
-                    time.sleep(5)
-                    
-                    log_message("🚀 Iniciando processo de envio para Unimed...", "INFO")
-                    log_message("ℹ️ Reutilizando navegador já aberto para evitar múltiplos logins...", "INFO")
-                    
-                    # Reutilizar o driver já aberto ao invés de criar um novo
-                    automacao = XMLGeneratorAutomation(username, password, pasta_download=pasta_download, headless=headless_mode)
-                    automacao.driver = driver  # Reutilizar o driver já aberto
-                    automacao.wait = wait  # Reutilizar o wait já configurado
-                    
-                    # Executar processo usando o driver existente
-                    sucesso_envio = automacao.executar_processo_completo_sem_login(unimed_user, unimed_pass, cancel_flag=cancel_flag)
-                    
-                    if not sucesso_envio:
-                        log_message("❌ Falha ao processar/enviar lote para Unimed.", "ERROR")
-                        return False
-                    else:
-                        log_message("✅ Lote enviado para Unimed com sucesso!", "SUCCESS")
-                except Exception as e:
-                    erro_envio = traceback.format_exc()
-                    log_message(f"❌ Exceção ao enviar lote para Unimed:", "ERROR")
-                    log_message(f"Tipo: {type(e).__name__}", "ERROR")
-                    log_message(f"Mensagem: {str(e)}", "ERROR")
-                    log_message(f"Stack trace:\n{erro_envio}", "ERROR")
+                log_message("🚀 Iniciando processo de envio para Unimed...", "INFO")
+                automacao = XMLGeneratorAutomation(username, password, pasta_download=pasta_download, headless=headless_mode)
+                sucesso_envio = automacao.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
+                if not sucesso_envio:
+                    log_message("❌ Falha ao processar/enviar lote para Unimed.", "ERROR")
                     return False
+                else:
+                    log_message("✅ Lote enviado para Unimed com sucesso!", "SUCCESS")
 
             # Processa rotina manual se necessário
             if gera_xml_tiss == "nao":
@@ -500,12 +360,8 @@ class PreparacaoLoteModule(BaseModule):
             return True
 
         except Exception as e:
-            erro_completo = traceback.format_exc()
-            log_message(f"❌ Erro durante a automação no Pathoweb:", "ERROR")
-            log_message(f"Tipo do erro: {type(e).__name__}", "ERROR")
-            log_message(f"Mensagem: {str(e)}", "ERROR")
-            log_message(f"Stack trace completo:\n{erro_completo}", "ERROR")
-            messagebox.showerror("Erro", f"❌ Erro durante a automação:\n{type(e).__name__}: {str(e)}\n\nVeja os logs para mais detalhes.")
+            log_message(f"❌ Erro durante a automação: {e}", "ERROR")
+            messagebox.showerror("Erro", f"❌ Erro durante a automação:\n{e}")
             return False
         finally:
             driver.quit()
