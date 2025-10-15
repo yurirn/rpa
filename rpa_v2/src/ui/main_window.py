@@ -32,6 +32,7 @@ class MainWindow:
         self.tipo_busca = tk.StringVar(value="numero_exame")
         self.gera_xml_tiss = tk.StringVar(value="sim")
         self.headless_mode = tk.BooleanVar(value=True)
+        self.pular_para_laudos = tk.BooleanVar(value=False)
 
         self.unimed_user = tk.StringVar()
         self.unimed_password = tk.StringVar()
@@ -156,6 +157,7 @@ class MainWindow:
         has_gera_xml_tiss = module.get("has_gera_xml_tiss") if module else False
         requires_unimed_credentials = module.get("requires_unimed_credentials") if module else False
         has_cobrar_de = module.get("has_cobrar_de") if module else False
+        has_pular_para_laudos = module.get("has_pular_para_laudos") if module else False
 
         # Armazenar referências dos módulos para uso posterior
         self.current_module_config = {
@@ -163,7 +165,8 @@ class MainWindow:
             'tipo_busca': tipo_busca,
             'has_gera_xml_tiss': has_gera_xml_tiss,
             'requires_unimed_credentials': requires_unimed_credentials,
-            'has_cobrar_de': has_cobrar_de
+            'has_cobrar_de': has_cobrar_de,
+            'has_pular_para_laudos': has_pular_para_laudos
         }
 
         row = 0
@@ -206,6 +209,15 @@ class MainWindow:
             gera_xml_frame.grid(row=row, column=1, sticky="w", columnspan=2)
             ttk.Radiobutton(gera_xml_frame, text="Sim", variable=self.gera_xml_tiss, value="sim", command=self.on_gera_xml_tiss_changed).pack(side=tk.LEFT, padx=(0, 20))
             ttk.Radiobutton(gera_xml_frame, text="Não", variable=self.gera_xml_tiss, value="nao", command=self.on_gera_xml_tiss_changed).pack(side=tk.LEFT)
+            row += 1
+
+        if has_pular_para_laudos:
+            self.pular_para_laudos_check = ttk.Checkbutton(
+                self.params_frame,
+                text="⚡ Pular processo de conclusão e ir direto para visualização de laudos",
+                variable=self.pular_para_laudos
+            )
+            self.pular_para_laudos_check.grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 0))
             row += 1
 
         # Criar container para credenciais Unimed (será mostrado/escondido dinamicamente)
@@ -383,6 +395,8 @@ class MainWindow:
             params["gera_xml_tiss"] = self.gera_xml_tiss.get()
         if module.get("has_cobrar_de"):
             params["cobrar_de"] = self.cobrar_de.get()
+        if module.get("has_pular_para_laudos"):
+            params["pular_para_laudos"] = self.pular_para_laudos.get()
         if module.get("requires_unimed_credentials"):
             unimed_user = self.unimed_user.get().strip()
             unimed_pass = self.unimed_password.get().strip()

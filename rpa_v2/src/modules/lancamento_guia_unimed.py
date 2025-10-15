@@ -662,6 +662,67 @@ class LancamentoGuiaUnimedModule(BaseModule):
             log_message(f"❌ Erro ao processar procedimentos: {e}", "ERROR")
             raise e
 
+    def fechar_popup_aviso(self, driver, wait):
+        """Fecha popup de aviso se aparecer (ex: aviso de cobertura contratual)"""
+        try:
+            # Verificar se há popup de aviso visível
+            popups_aviso = driver.find_elements(By.CSS_SELECTOR, ".ui-dialog.ui-widget.ui-widget-content")
+            
+            for popup in popups_aviso:
+                if popup.is_displayed():
+                    # Verificar se é o aviso de cobertura ou outros avisos
+                    try:
+                        texto_popup = popup.text
+                        
+                        # Lista de mensagens de aviso que devem ser fechadas (não são erros)
+                        avisos_conhecidos = [
+                            "Sem cobertura contratual para Materiais e Medicamentos FORA de Ambiente Hospitalar",
+                            "Atenção"
+                        ]
+                        
+                        # Verificar se o popup contém alguma mensagem de aviso conhecida
+                        eh_aviso = any(aviso.lower() in texto_popup.lower() for aviso in avisos_conhecidos)
+                        
+                        if eh_aviso:
+                            log_message(f"ℹ️ Popup de aviso detectado: {texto_popup[:100]}...", "INFO")
+                            
+                            # Tentar clicar no botão Ok usando múltiplos seletores
+                            botao_ok = None
+                            seletores_ok = [
+                                ".ui-dialog-buttonset button",
+                                ".ui-dialog-buttonpane button",
+                                "button[type='button']"
+                            ]
+                            
+                            for seletor in seletores_ok:
+                                try:
+                                    botoes = popup.find_elements(By.CSS_SELECTOR, seletor)
+                                    for botao in botoes:
+                                        if botao.is_displayed() and 'ok' in botao.text.lower():
+                                            botao_ok = botao
+                                            break
+                                    if botao_ok:
+                                        break
+                                except Exception:
+                                    continue
+                            
+                            if botao_ok:
+                                botao_ok.click()
+                                time.sleep(0.5)
+                                log_message("✅ Popup de aviso fechado, continuando processamento", "SUCCESS")
+                            else:
+                                # Se não encontrou botão, tentar fechar via JavaScript
+                                log_message("⚠️ Botão Ok não encontrado, tentando fechar via JavaScript...", "WARNING")
+                                driver.execute_script("arguments[0].remove();", popup)
+                                time.sleep(0.5)
+                    except Exception as e:
+                        log_message(f"⚠️ Erro ao processar popup de aviso: {e}", "WARNING")
+                        continue
+                        
+        except Exception as e:
+            # Se falhar, não é crítico - apenas logar
+            log_message(f"⚠️ Erro ao verificar popups de aviso: {e}", "WARNING")
+    
     def autorizar_guia(self, driver, wait):
         """Clica no botão Autorizar e captura o resultado"""
         try:
@@ -689,8 +750,12 @@ class LancamentoGuiaUnimedModule(BaseModule):
                 log_message("⚠️ Clique normal falhou, tentando com JavaScript...", "WARNING")
                 driver.execute_script("arguments[0].click();", botao_autorizar)
             
-            # Aguardar modal aparecer
-            time.sleep(3)
+            # Aguardar um momento e verificar se há popups de aviso
+            time.sleep(2)
+            self.fechar_popup_aviso(driver, wait)
+            
+            # Aguardar modal de resultado aparecer
+            time.sleep(1)
             
             # Verificar se modal de sucesso apareceu
             try:
@@ -1349,12 +1414,19 @@ class LancamentoGuiaUnimedModule(BaseModule):
                     df.loc[indice, col_data_proc] = resultado.get('timestamp', '')
                     df.loc[indice, col_status_guia] = resultado.get('status_guia', '')
                     
+                    # Sempre preservar o número da guia se existir
+                    df.loc[indice, col_numero_guia] = resultado.get('numero_guia', '')
+                    
                     if resultado.get('status') == 'sucesso':
-                        df.loc[indice, col_numero_guia] = resultado.get('numero_guia', '')
                         df.loc[indice, col_status_proc] = 'SUCESSO'
                         df.loc[indice, col_mensagem_erro] = ''
+                    elif resultado.get('status') == 'analise':
+                        # Guia criada mas enviada para análise/auditoria
+                        df.loc[indice, col_status_proc] = 'ANÁLISE'
+                        df.loc[indice, col_mensagem_erro] = resultado.get('mensagem', 'Guia enviada para análise')
                     else:
-                        df.loc[indice, col_numero_guia] = ''
+                        # Status de erro - preservar número da guia se houver
+                        # (ex: guia criada mas não liberada após tentativas)
                         df.loc[indice, col_status_proc] = 'ERRO'
                         # Limpar mensagem de erro antes de salvar
                         mensagem_erro_original = resultado.get('erro', resultado.get('mensagem', ''))
@@ -1813,10 +1885,11 @@ class LancamentoGuiaUnimedModule(BaseModule):
                                 log_message(f"⏳ Guia {numero_guia} não está liberada. Aguardando...", "INFO")
                                 liberacao_resultado = self.esperar_liberacao_guia(driver, wait, numero_guia, cancel_flag)
                                 if not liberacao_resultado.get('sucesso'):
-                                    log_message(f"❌ Guia {numero_guia} não foi liberada. Não será enviada ao PathoWeb.", "ERROR")
+                                    log_message(f"❌ Guia {numero_guia} não foi liberada após tentativas. Número preservado no Excel para consulta.", "ERROR")
                                     resultado['status'] = 'erro'
                                     resultado['erro'] = liberacao_resultado.get('erro', 'Guia não liberada')
                                     resultado['status_guia'] = liberacao_resultado.get('status_guia', 'Não Liberada')
+                                    # numero_guia já está em resultado, será preservado no Excel
                                     continue # Pular para a próxima guia, pois esta não foi liberada
                                 else:
                                     resultado['status_guia'] = liberacao_resultado.get('status_guia')

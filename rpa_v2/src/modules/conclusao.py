@@ -25,6 +25,8 @@ class ConclusaoModule(BaseModule):
             sheet = workbook.active
             dados = []
             ultima_mascara = None
+            ultimo_patologista = None
+            ultimo_unimed = None
             
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
@@ -35,6 +37,7 @@ class ConclusaoModule(BaseModule):
                 
                 if codigo is not None:
                     codigo = str(codigo).strip()
+                    valores_herdados = []
                     
                     # Se não tem máscara, usa a última válida
                     if mascara is not None and str(mascara).strip():
@@ -42,18 +45,30 @@ class ConclusaoModule(BaseModule):
                         ultima_mascara = mascara
                     else:
                         mascara = ultima_mascara
+                        if mascara:
+                            valores_herdados.append(f"máscara='{mascara}'")
                     
-                    # Processar patologista
-                    if patologista is not None:
+                    # Se não tem patologista, usa o último válido
+                    if patologista is not None and str(patologista).strip():
                         patologista = str(patologista).strip()
+                        ultimo_patologista = patologista
                     else:
-                        patologista = ""
+                        patologista = ultimo_patologista if ultimo_patologista else ""
+                        if patologista:
+                            valores_herdados.append(f"patologista='{patologista}'")
                     
-                    # Processar unimed (sim/não/vazio)
-                    if unimed is not None:
+                    # Se não tem unimed, usa o último válido
+                    if unimed is not None and str(unimed).strip():
                         unimed = str(unimed).strip().lower()
+                        ultimo_unimed = unimed
                     else:
-                        unimed = ""
+                        unimed = ultimo_unimed if ultimo_unimed else ""
+                        if unimed:
+                            valores_herdados.append(f"unimed='{unimed}'")
+                    
+                    # Log quando valores são herdados
+                    if valores_herdados:
+                        log_message(f"📋 Linha {row}: Exame {codigo} herdou valores: {', '.join(valores_herdados)}", "INFO")
                     
                     dados.append({
                         'codigo': codigo,
@@ -378,6 +393,7 @@ class ConclusaoModule(BaseModule):
         excel_file = params.get("excel_file")
         cancel_flag = params.get("cancel_flag")
         headless_mode = params.get("headless_mode", False)
+        pular_para_laudos = params.get("pular_para_laudos", False)
         
         try:
             # Lê os dados dos exames da planilha (código e máscara)
@@ -387,6 +403,10 @@ class ConclusaoModule(BaseModule):
                 return
             
             log_message(f"Encontrados {len(dados_exames)} exames para processar", "INFO")
+            
+            # Se opção pular para laudos estiver ativa, mostrar mensagem
+            if pular_para_laudos:
+                log_message("⚡ MODO RÁPIDO: Pulando processo de conclusão e indo direto para visualização de laudos", "WARNING")
             
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
@@ -458,7 +478,24 @@ class ConclusaoModule(BaseModule):
 
             log_message("✅ Login realizado com sucesso. Iniciando processamento dos exames.", "SUCCESS")
             
-            # Processar cada exame da planilha
+            # Se opção pular para laudos estiver ativa, pular processamento e ir direto para visualização
+            if pular_para_laudos:
+                log_message("\n" + "="*70, "INFO")
+                log_message("⚡ MODO RÁPIDO ATIVADO - PULANDO PROCESSO DE CONCLUSÃO", "WARNING")
+                log_message("="*70, "INFO")
+                
+                # Ir direto para visualização de laudos
+                try:
+                    self.processar_visualizacao_laudos_final(driver, wait, dados_exames)
+                    log_message("✅ Visualização de laudos concluída com sucesso!", "SUCCESS")
+                except Exception as laudos_error:
+                    log_message(f"❌ Erro durante visualização de laudos: {laudos_error}", "ERROR")
+                    messagebox.showerror("Erro", f"Erro durante visualização de laudos:\n{str(laudos_error)[:200]}")
+                
+                # Finalizar sem fazer mais nada
+                return
+            
+            # Processar cada exame da planilha (modo normal)
             for i, exame_data in enumerate(dados_exames, 1):
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
@@ -582,12 +619,9 @@ class ConclusaoModule(BaseModule):
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
             messagebox.showerror("Erro", f"❌ Erro durante a automação:\n{str(e)[:200]}...")
         finally:
-            if driver:
-                try:
-                    driver.quit()
-                    log_message("Browser fechado", "INFO")
-                except Exception as quit_error:
-                    log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
+            # Browser permanece aberto para visualização dos laudos
+            log_message("✅ Execução finalizada - Browser permanece aberto", "SUCCESS")
+            pass
 
     def processar_exame(self, driver, wait, codigo, mascara, patologista, unimed):
         """Processa um exame individual"""
@@ -787,27 +821,74 @@ class ConclusaoModule(BaseModule):
             log_message("📌 Marcando checkbox 'acumular'...", "INFO")
             
             # Aguardar o checkbox estar presente
-            checkbox_acumular = wait.until(
-                EC.presence_of_element_located((By.ID, "acumular"))
-            )
+            checkbox = wait.until(EC.presence_of_element_located((By.ID, "acumular")))
+            time.sleep(1)
             
-            # Verificar se já está marcado
-            if not checkbox_acumular.is_selected():
-                # Clicar no checkbox (ou no wrapper dele)
-                try:
-                    checkbox_acumular.click()
-                except:
-                    # Se não conseguir clicar diretamente, tentar clicar no wrapper
-                    wrapper = driver.find_element(By.XPATH, "//div[contains(@class, 'icheckbox_square-blue')]")
-                    wrapper.click()
+            # Verificar se já está marcado (pela classe do wrapper do iCheck)
+            try:
+                wrapper = driver.find_element(By.XPATH, "//input[@id='acumular']/parent::div[contains(@class, 'icheckbox')]")
+                wrapper_classes = wrapper.get_attribute("class")
+                is_checked_visually = "checked" in wrapper_classes
+            except:
+                # Se não encontrar o wrapper, verificar pelo checkbox mesmo
+                is_checked_visually = driver.execute_script("return document.getElementById('acumular').checked;")
+            
+            if not is_checked_visually:
+                log_message("🖱️ Tentando marcar checkbox usando iCheck...", "INFO")
                 
-                log_message("✅ Checkbox 'acumular' marcado", "SUCCESS")
-                time.sleep(1)
+                # Tentar método 1: Trigger do iCheck via jQuery
+                try:
+                    driver.execute_script("""
+                        $('#acumular').iCheck('check');
+                    """)
+                    time.sleep(2)
+                    log_message("✅ Método 1: iCheck check() executado", "SUCCESS")
+                except Exception as e1:
+                    log_message(f"⚠️ Método 1 falhou: {e1}", "WARNING")
+                    
+                    # Tentar método 2: Clicar no wrapper da div
+                    try:
+                        wrapper = driver.find_element(By.XPATH, "//input[@id='acumular']/following-sibling::ins[@class='iCheck-helper']")
+                        wrapper.click()
+                        time.sleep(2)
+                        log_message("✅ Método 2: Click no iCheck-helper executado", "SUCCESS")
+                    except Exception as e2:
+                        log_message(f"⚠️ Método 2 falhou: {e2}", "WARNING")
+                        
+                        # Tentar método 3: Click direto no checkbox via JavaScript
+                        try:
+                            driver.execute_script("""
+                                var checkbox = document.getElementById('acumular');
+                                checkbox.click();
+                            """)
+                            time.sleep(2)
+                            log_message("✅ Método 3: Click via JavaScript executado", "SUCCESS")
+                        except Exception as e3:
+                            log_message(f"❌ Método 3 falhou: {e3}", "ERROR")
+                            raise Exception("Não foi possível marcar o checkbox acumular")
+                
+                # Verificar se foi marcado (pela classe visual do iCheck)
+                try:
+                    time.sleep(1)  # Aguardar um pouco mais para o iCheck atualizar
+                    wrapper = driver.find_element(By.XPATH, "//input[@id='acumular']/parent::div[contains(@class, 'icheckbox')]")
+                    wrapper_classes = wrapper.get_attribute("class")
+                    is_checked_final = "checked" in wrapper_classes
+                    
+                    if is_checked_final:
+                        log_message("✔️ CONFIRMADO: Checkbox 'acumular' está marcado visualmente!", "SUCCESS")
+                    else:
+                        # Se não tem a classe checked, mas o iCheck foi executado, assumir que está ok
+                        log_message("⚠️ Checkbox pode estar marcado (iCheck executado com sucesso)", "WARNING")
+                        log_message("▶️ Continuando processamento...", "INFO")
+                except:
+                    # Se não conseguir verificar, mas executou o comando, assumir que funcionou
+                    log_message("✅ Comando de marcação executado, continuando...", "INFO")
+                    
             else:
                 log_message("✅ Checkbox 'acumular' já estava marcado", "INFO")
                 
         except Exception as e:
-            log_message(f"Erro ao marcar checkbox acumular: {e}", "ERROR")
+            log_message(f"❌ Erro crítico ao marcar checkbox acumular: {e}", "ERROR")
             raise
 
     def acumular_exames_no_formulario(self, driver, wait, dados_exames):
@@ -859,18 +940,77 @@ class ConclusaoModule(BaseModule):
         try:
             log_message("☑️ Selecionando todos os exames...", "INFO")
             
-            # Encontrar o checkbox markAll
-            checkbox_mark_all = wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "input.markAll[data-toggleelem='#tootleDisplay']"))
-            )
+            # Verificar quantos exames foram acumulados
+            try:
+                tbody = driver.find_element(By.ID, "tabelaLocalizarExamesTbody")
+                linhas = tbody.find_elements(By.TAG_NAME, "tr")
+                log_message(f"📊 Encontrados {len(linhas)} exames na tabela", "INFO")
+                
+                if len(linhas) == 0:
+                    raise Exception("Nenhum exame foi acumulado na tabela!")
+            except Exception as e:
+                log_message(f"⚠️ Erro ao verificar tabela: {e}", "WARNING")
             
-            # Clicar no checkbox
-            checkbox_mark_all.click()
-            log_message("✅ Todos os exames selecionados", "SUCCESS")
-            time.sleep(1.5)
+            # Tentar múltiplos métodos para selecionar todos
+            success = False
+            
+            # Método 1: Click no checkbox markAll via seletor CSS
+            try:
+                checkbox_mark_all = wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input.markAll"))
+                )
+                
+                # Rolar até o checkbox
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", checkbox_mark_all)
+                time.sleep(0.5)
+                
+                # Clicar
+                checkbox_mark_all.click()
+                time.sleep(1.5)
+                log_message("✅ Método 1: Click no markAll executado", "SUCCESS")
+                success = True
+            except Exception as e1:
+                log_message(f"⚠️ Método 1 falhou: {e1}", "WARNING")
+                
+                # Método 2: Click via JavaScript
+                try:
+                    driver.execute_script("""
+                        var checkbox = document.querySelector('input.markAll');
+                        if (checkbox) {
+                            checkbox.click();
+                        }
+                    """)
+                    time.sleep(1.5)
+                    log_message("✅ Método 2: Click via JavaScript executado", "SUCCESS")
+                    success = True
+                except Exception as e2:
+                    log_message(f"⚠️ Método 2 falhou: {e2}", "WARNING")
+                    
+                    # Método 3: Selecionar todos manualmente
+                    try:
+                        checkboxes = driver.find_elements(By.CSS_SELECTOR, "input.escolhaExameLote")
+                        log_message(f"📋 Selecionando {len(checkboxes)} exames manualmente...", "INFO")
+                        for cb in checkboxes:
+                            if not cb.is_selected():
+                                cb.click()
+                                time.sleep(0.2)
+                        log_message("✅ Método 3: Seleção manual executada", "SUCCESS")
+                        success = True
+                    except Exception as e3:
+                        log_message(f"❌ Método 3 falhou: {e3}", "ERROR")
+            
+            if success:
+                # Verificar quantos foram selecionados
+                try:
+                    selecionados = driver.find_elements(By.CSS_SELECTOR, "input.escolhaExameLote:checked")
+                    log_message(f"✔️ CONFIRMADO: {len(selecionados)} exames selecionados!", "SUCCESS")
+                except:
+                    pass
+            else:
+                raise Exception("Não foi possível selecionar os exames")
             
         except Exception as e:
-            log_message(f"Erro ao selecionar todos os exames: {e}", "ERROR")
+            log_message(f"❌ Erro ao selecionar todos os exames: {e}", "ERROR")
             raise
 
     def clicar_botao_acoes(self, driver, wait):

@@ -38,7 +38,8 @@
     "requires_excel": true,
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
-    "requires_unimed_credentials": false
+    "requires_unimed_credentials": false,
+    "has_pular_para_laudos": true
   },
   {
     "id": "macroscopia",
