@@ -569,6 +569,15 @@ class ConclusaoModule(BaseModule):
             # Mostrar resumo final
             self.mostrar_resumo_final(resultados)
             
+            # Processar visualização de laudos em lote (etapa final)
+            try:
+                log_message("\n🔄 Iniciando processo final de visualização de laudos...", "INFO")
+                self.processar_visualizacao_laudos_final(driver, wait, dados_exames)
+                log_message("✅ Processo completo finalizado com sucesso!", "SUCCESS")
+            except Exception as laudos_error:
+                log_message(f"⚠️ Erro durante visualização de laudos: {laudos_error}", "WARNING")
+                messagebox.showwarning("Aviso", f"Processo de conclusão finalizado, mas houve erro na visualização de laudos:\n{str(laudos_error)[:200]}")
+            
         except Exception as e:
             log_message(f"❌ Erro durante a automação: {e}", "ERROR")
             messagebox.showerror("Erro", f"❌ Erro durante a automação:\n{str(e)[:200]}...")
@@ -771,6 +780,174 @@ class ConclusaoModule(BaseModule):
         except Exception as e:
             log_message(f"Erro durante processo de conclusão: {e}", "ERROR")
             return {'status': 'erro_conclusao', 'detalhes': str(e)}
+
+    def marcar_checkbox_acumular(self, driver, wait):
+        """Marca o checkbox 'acumular' na tela principal"""
+        try:
+            log_message("📌 Marcando checkbox 'acumular'...", "INFO")
+            
+            # Aguardar o checkbox estar presente
+            checkbox_acumular = wait.until(
+                EC.presence_of_element_located((By.ID, "acumular"))
+            )
+            
+            # Verificar se já está marcado
+            if not checkbox_acumular.is_selected():
+                # Clicar no checkbox (ou no wrapper dele)
+                try:
+                    checkbox_acumular.click()
+                except:
+                    # Se não conseguir clicar diretamente, tentar clicar no wrapper
+                    wrapper = driver.find_element(By.XPATH, "//div[contains(@class, 'icheckbox_square-blue')]")
+                    wrapper.click()
+                
+                log_message("✅ Checkbox 'acumular' marcado", "SUCCESS")
+                time.sleep(1)
+            else:
+                log_message("✅ Checkbox 'acumular' já estava marcado", "INFO")
+                
+        except Exception as e:
+            log_message(f"Erro ao marcar checkbox acumular: {e}", "ERROR")
+            raise
+
+    def acumular_exames_no_formulario(self, driver, wait, dados_exames):
+        """Acumula todos os exames no formulário digitando os códigos"""
+        try:
+            log_message(f"\n📝 Iniciando acumulação de {len(dados_exames)} exames...", "INFO")
+            
+            for i, exame_data in enumerate(dados_exames, 1):
+                codigo = exame_data['codigo']
+                log_message(f"➡️ Acumulando exame {i}/{len(dados_exames)}: {codigo}", "INFO")
+                
+                # Encontrar o campo de código de barras
+                campo_codigo = wait.until(
+                    EC.presence_of_element_located((By.ID, "inputSearchCodBarra"))
+                )
+                
+                # Limpar o campo
+                campo_codigo.clear()
+                time.sleep(0.3)
+                
+                # Digitar o código
+                campo_codigo.send_keys(codigo)
+                time.sleep(0.5)
+                
+                # Pressionar Enter
+                campo_codigo.send_keys(Keys.ENTER)
+                log_message(f"✅ Código {codigo} digitado e Enter pressionado", "INFO")
+                
+                # Aguardar o loading/processamento
+                time.sleep(2)
+                
+                # Verificar se o exame foi adicionado na tabela
+                try:
+                    tbody = driver.find_element(By.ID, "tabelaLocalizarExamesTbody")
+                    linhas = tbody.find_elements(By.TAG_NAME, "tr")
+                    log_message(f"📊 Total de exames acumulados: {len(linhas)}", "INFO")
+                except:
+                    pass
+            
+            log_message("✅ Todos os exames foram acumulados no formulário", "SUCCESS")
+            time.sleep(2)
+            
+        except Exception as e:
+            log_message(f"Erro ao acumular exames: {e}", "ERROR")
+            raise
+
+    def selecionar_todos_exames(self, driver, wait):
+        """Clica no checkbox 'markAll' para selecionar todos os exames"""
+        try:
+            log_message("☑️ Selecionando todos os exames...", "INFO")
+            
+            # Encontrar o checkbox markAll
+            checkbox_mark_all = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "input.markAll[data-toggleelem='#tootleDisplay']"))
+            )
+            
+            # Clicar no checkbox
+            checkbox_mark_all.click()
+            log_message("✅ Todos os exames selecionados", "SUCCESS")
+            time.sleep(1.5)
+            
+        except Exception as e:
+            log_message(f"Erro ao selecionar todos os exames: {e}", "ERROR")
+            raise
+
+    def clicar_botao_acoes(self, driver, wait):
+        """Clica no botão de ações (engrenagem)"""
+        try:
+            log_message("⚙️ Clicando no botão Ações...", "INFO")
+            
+            # Encontrar o botão de ações
+            botao_acoes = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//a[@class='btn btn-default dropdown-toggle btn-sm' and @data-toggle='dropdown']"))
+            )
+            
+            # Rolar até o botão
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_acoes)
+            time.sleep(1)
+            
+            # Clicar no botão
+            botao_acoes.click()
+            log_message("✅ Botão Ações clicado, dropdown aberto", "SUCCESS")
+            time.sleep(1.5)
+            
+        except Exception as e:
+            log_message(f"Erro ao clicar no botão Ações: {e}", "ERROR")
+            raise
+
+    def clicar_opcao_laudos(self, driver, wait):
+        """Clica na opção 'Laudos' do dropdown"""
+        try:
+            log_message("📄 Clicando na opção 'Laudos'...", "INFO")
+            
+            # Encontrar o link "Laudos" no dropdown
+            link_laudos = wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//a[@data-url='/moduloExame/visualizarLaudosAjax' and @data-index='2plus']"))
+            )
+            
+            # Clicar no link
+            link_laudos.click()
+            log_message("✅ Opção 'Laudos' clicada", "SUCCESS")
+            time.sleep(3)
+            
+            # Aguardar o popup abrir (se necessário)
+            log_message("⏳ Aguardando processamento...", "INFO")
+            time.sleep(2)
+            
+        except Exception as e:
+            log_message(f"Erro ao clicar na opção Laudos: {e}", "ERROR")
+            raise
+
+    def processar_visualizacao_laudos_final(self, driver, wait, dados_exames):
+        """Processa a etapa final de visualização de laudos em lote"""
+        try:
+            log_message("\n" + "="*50, "INFO")
+            log_message("INICIANDO PROCESSO DE VISUALIZAÇÃO DE LAUDOS", "INFO")
+            log_message("="*50, "INFO")
+            
+            # 1. Marcar checkbox acumular
+            self.marcar_checkbox_acumular(driver, wait)
+            
+            # 2. Acumular todos os exames no formulário
+            self.acumular_exames_no_formulario(driver, wait, dados_exames)
+            
+            # 3. Selecionar todos os exames
+            self.selecionar_todos_exames(driver, wait)
+            
+            # 4. Clicar no botão de ações
+            self.clicar_botao_acoes(driver, wait)
+            
+            # 5. Clicar na opção Laudos
+            self.clicar_opcao_laudos(driver, wait)
+            
+            log_message("\n" + "="*50, "SUCCESS")
+            log_message("PROCESSO DE VISUALIZAÇÃO DE LAUDOS CONCLUÍDO", "SUCCESS")
+            log_message("="*50 + "\n", "SUCCESS")
+            
+        except Exception as e:
+            log_message(f"❌ Erro durante processo de visualização de laudos: {e}", "ERROR")
+            raise
 
     def mostrar_resumo_final(self, resultados):
         """Mostra o resumo final do processamento"""
