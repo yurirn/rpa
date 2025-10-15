@@ -32,7 +32,7 @@
   },
   {
     "id": "conclusao",
-    "name": "Conclusão de Exame - Dr George",
+    "name": "Conclusão de Exame",
     "description": "",
     "module_path": "modules.conclusao",
     "requires_excel": true,

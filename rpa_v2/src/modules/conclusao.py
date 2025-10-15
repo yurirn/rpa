@@ -30,6 +30,8 @@ class ConclusaoModule(BaseModule):
             for row in range(2, sheet.max_row + 1):
                 codigo = sheet[f'A{row}'].value
                 mascara = sheet[f'B{row}'].value
+                patologista = sheet[f'C{row}'].value
+                unimed = sheet[f'D{row}'].value
                 
                 if codigo is not None:
                     codigo = str(codigo).strip()
@@ -41,9 +43,23 @@ class ConclusaoModule(BaseModule):
                     else:
                         mascara = ultima_mascara
                     
+                    # Processar patologista
+                    if patologista is not None:
+                        patologista = str(patologista).strip()
+                    else:
+                        patologista = ""
+                    
+                    # Processar unimed (sim/não/vazio)
+                    if unimed is not None:
+                        unimed = str(unimed).strip().lower()
+                    else:
+                        unimed = ""
+                    
                     dados.append({
                         'codigo': codigo,
-                        'mascara': mascara
+                        'mascara': mascara,
+                        'patologista': patologista,
+                        'unimed': unimed
                     })
             
             workbook.close()
@@ -274,28 +290,75 @@ class ConclusaoModule(BaseModule):
             log_message(f"Erro ao enviar para próxima etapa: {e}", "ERROR")
             raise
 
-    def assinar_com_george(self, driver, wait):
-        """Faz o processo de assinatura com Dr. George"""
+    def get_patologista_info(self, nome_patologista):
+        """Retorna as informações do patologista (checkbox value e senha)"""
+        # Mapeamento de patologistas (nome em maiúsculo -> (checkbox_value, senha))
+        # NOTA: Os valores dos checkboxes precisam ser confirmados no sistema
+        patologistas = {
+            'GEORGE': ('2173', '1323'),
+            'LEANDRO': ('73069', '1308'),  # Substitua XXXXX pelo valor correto do checkbox
+            'MIRELLA': ('269762', '6523'),  # Substitua XXXXX pelo valor correto do checkbox
+            'MARINA': ('269765', '1404'),   # Substitua XXXXX pelo valor correto do checkbox
+            'ARYELA': ('306997', '1209'),   # Substitua XXXXX pelo valor correto do checkbox
+        }
+        
+        nome_upper = nome_patologista.upper().strip()
+        
+        if nome_upper in patologistas:
+            return patologistas[nome_upper]
+        else:
+            log_message(f"⚠️ Patologista '{nome_patologista}' não encontrado no mapeamento", "WARNING")
+            return None
+
+    def assinar_com_patologista(self, driver, wait, nome_patologista, checkbox_value, senha):
+        """Assina com um patologista específico"""
+        try:
+            log_message(f"📝 Assinando com {nome_patologista}...", "INFO")
+            
+            # Encontrar e clicar no checkbox do patologista
+            checkbox = wait.until(
+                EC.element_to_be_clickable((By.XPATH, f"//input[@type='checkbox' and @value='{checkbox_value}']"))
+            )
+            checkbox.click()
+            log_message(f"✅ Checkbox de {nome_patologista} marcado", "INFO")
+            time.sleep(1)
+            
+            # Aguardar o campo de senha aparecer e digitar a senha
+            campo_senha = wait.until(
+                EC.presence_of_element_located((By.NAME, f"senha_{checkbox_value}"))
+            )
+            campo_senha.send_keys(senha)
+            log_message(f"🔐 Senha de {nome_patologista} digitada", "INFO")
+            time.sleep(1)
+            
+        except Exception as e:
+            log_message(f"Erro ao assinar com {nome_patologista}: {e}", "ERROR")
+            raise
+
+    def processar_assinatura(self, driver, wait, patologista, is_unimed):
+        """Processa a assinatura de acordo com as regras"""
         try:
             # Aguardar o modal de assinatura aparecer
             wait.until(EC.presence_of_element_located((By.ID, "assinatura")))
             log_message("📋 Modal de assinatura aberto", "INFO")
             
-            # Encontrar e clicar no checkbox do Dr. George (value="2173")
-            checkbox_george = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox' and @value='2173']"))
-            )
-            checkbox_george.click()
-            log_message("✅ Checkbox do Dr. George marcado", "INFO")
-            time.sleep(1)
+            # Obter informações do patologista
+            info_patologista = self.get_patologista_info(patologista)
+            if not info_patologista:
+                raise Exception(f"Patologista '{patologista}' não encontrado no sistema")
             
-            # Aguardar o campo de senha aparecer e digitar a senha
-            campo_senha = wait.until(
-                EC.presence_of_element_located((By.NAME, "senha_2173"))
-            )
-            campo_senha.send_keys("1323")
-            log_message("🔐 Senha digitada", "INFO")
-            time.sleep(1)
+            checkbox_patologista, senha_patologista = info_patologista
+            
+            # Sempre assina com o patologista primeiro
+            self.assinar_com_patologista(driver, wait, patologista, checkbox_patologista, senha_patologista)
+            
+            # Se for UNIMED, também assina com George
+            if is_unimed:
+                log_message("📝 Exame UNIMED - assinando também com Dr. George", "INFO")
+                info_george = self.get_patologista_info('GEORGE')
+                if info_george:
+                    checkbox_george, senha_george = info_george
+                    self.assinar_com_patologista(driver, wait, 'Dr. George', checkbox_george, senha_george)
             
             # Clicar no botão Assinar
             botao_assinar = wait.until(
@@ -403,8 +466,10 @@ class ConclusaoModule(BaseModule):
                 
                 codigo = exame_data['codigo']
                 mascara = exame_data['mascara']
+                patologista = exame_data['patologista']
+                unimed = exame_data['unimed']
                 
-                log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara})", "INFO")
+                log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara}, patologista: {patologista}, unimed: {unimed})", "INFO")
                 
                 try:
                     # Verificar se o browser ainda está ativo
@@ -480,10 +545,12 @@ class ConclusaoModule(BaseModule):
                         log_message("✅ Browser recriado e login realizado novamente", "SUCCESS")
                     
                     # Processar este exame específico
-                    resultado = self.processar_exame(driver, wait, codigo, mascara)
+                    resultado = self.processar_exame(driver, wait, codigo, mascara, patologista, unimed)
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
+                        'patologista': patologista,
+                        'unimed': unimed,
                         'status': resultado['status'],
                         'detalhes': resultado.get('detalhes', '')
                     })
@@ -493,6 +560,8 @@ class ConclusaoModule(BaseModule):
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
+                        'patologista': patologista,
+                        'unimed': unimed,
                         'status': 'erro',
                         'detalhes': str(e)
                     })
@@ -511,7 +580,7 @@ class ConclusaoModule(BaseModule):
                 except Exception as quit_error:
                     log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
 
-    def processar_exame(self, driver, wait, codigo, mascara):
+    def processar_exame(self, driver, wait, codigo, mascara, patologista, unimed):
         """Processa um exame individual"""
         try:
             # Verificar se a sessão do browser ainda está ativa
@@ -565,7 +634,7 @@ class ConclusaoModule(BaseModule):
             self.interagir_com_campo_codigo(driver, campo_codigo, codigo)
             
             # Aguardar div de andamento aparecer
-            return self.aguardar_e_processar_andamento(driver, wait, mascara)
+            return self.aguardar_e_processar_andamento(driver, wait, mascara, patologista, unimed)
                 
         except Exception as e:
             error_message = str(e)
@@ -640,7 +709,7 @@ class ConclusaoModule(BaseModule):
             """, campo_codigo)
             log_message("⌨️ Enter pressionado com JavaScript", "INFO")
 
-    def aguardar_e_processar_andamento(self, driver, wait, mascara):
+    def aguardar_e_processar_andamento(self, driver, wait, mascara, patologista, unimed):
         """Aguarda a div de andamento e processa o exame"""
         log_message("Aguardando div de andamento do exame aparecer...", "INFO")
         
@@ -671,13 +740,13 @@ class ConclusaoModule(BaseModule):
         # Verificar se tem SVG na conclusão
         if self.verificar_svg_conclusao(driver):
             log_message("✅ SVG encontrado na etapa Conclusão - iniciando processo", "SUCCESS")
-            return self.processar_conclusao_completa(driver, wait, mascara)
+            return self.processar_conclusao_completa(driver, wait, mascara, patologista, unimed)
         else:
             log_message("⚠️ SVG não encontrado na etapa Conclusão - fechando exame", "WARNING")
             self.fechar_exame(driver, wait)
             return {'status': 'sem_svg', 'detalhes': 'Exame não está na etapa de conclusão'}
 
-    def processar_conclusao_completa(self, driver, wait, mascara):
+    def processar_conclusao_completa(self, driver, wait, mascara, patologista, unimed):
         """Processa a conclusão completa do exame"""
         try:
             # Digitar a máscara e buscar
@@ -692,8 +761,9 @@ class ConclusaoModule(BaseModule):
             # Enviar para próxima etapa
             self.enviar_proxima_etapa(driver, wait)
             
-            # Assinar com Dr. George
-            self.assinar_com_george(driver, wait)
+            # Processar assinatura de acordo com as regras
+            is_unimed = unimed.lower() == 'sim'
+            self.processar_assinatura(driver, wait, patologista, is_unimed)
             
             log_message("🎉 Processo de conclusão finalizado com sucesso!", "SUCCESS")
             return {'status': 'sucesso', 'detalhes': 'Conclusão processada e assinada'}

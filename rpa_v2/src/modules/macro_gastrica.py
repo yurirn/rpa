@@ -90,6 +90,9 @@ class MacroGastricaModule(BaseModule):
                     else:
                         mascara = ultima_mascara
 
+                    # Preservar o valor original de campo_d antes de converter
+                    campo_d_original = str(campo_d).strip().lower() if campo_d is not None else ""
+                    
                     # Regra: se campo_d for 'mult', usar 6
                     if campo_d is not None and str(campo_d).strip().lower() == 'mult':
                         campo_d_valor = '6'
@@ -101,6 +104,7 @@ class MacroGastricaModule(BaseModule):
                         'mascara': mascara,
                         'responsavel_macro': responsavel_macro_valor,
                         'campo_d': campo_d_valor,
+                        'campo_d_original': campo_d_original,  # Preserva se era 'mult'
                         'campo_e': str(campo_e).strip() if campo_e is not None else "",
                         'campo_f': str(campo_f).strip() if campo_f is not None else "",
                         'campo_g': str(campo_g).strip() if campo_g is not None else "",
@@ -234,7 +238,8 @@ class MacroGastricaModule(BaseModule):
             'PALOMA': 'Paloma Brenda Silva De Oliveira',
             'ELLEN': 'Ellen Andressa de Alvarenga',
             'VITORIA': 'Vitoria Aquino Nairne Domingues',
-            'ANNAI': 'Annai Lukã Vitorino Losnak'
+            'ANNAI': 'Annai Lukã Vitorino Losnak',
+            'ANA' : 'Ana Carolina Viecele Campos'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(
@@ -344,7 +349,7 @@ class MacroGastricaModule(BaseModule):
         log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "SUCCESS")
         time.sleep(0.5)
 
-    def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g):
+    def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g):
         """Abre o modal de variáveis e preenche os campos baseado na máscara"""
         try:
             # Clicar no botão "Pesquisar variáveis (F7)"
@@ -394,11 +399,12 @@ class MacroGastricaModule(BaseModule):
                 valores = [campo_e, campo_f]
                 
             elif mascara_upper == 'COLO':
-                # Variável selecionável (mult), quantidade, med1, med2, med3, Variável e quantidade na legenda
-                if str(campo_d).strip().lower() == 'mult':
-                    valores = ["Múltiplos", campo_d, campo_e, campo_f, campo_g, "M", campo_d]
+                # Ordem correta: quantidade fragmentos, med1, med2, med3, quantidade legenda
+                # Usar campo_d_original para verificar se era 'mult' na planilha
+                if campo_d_original == 'mult':
+                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
                 else:
-                    valores = [campo_d, campo_d, campo_e, campo_f, campo_g, campo_d, campo_d]
+                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]
                     
             elif mascara_upper in ['RTU-FIT', 'RTU-FIP']:
                 # peso (campo_d), med1, med2, med3 - PESO VEM PRIMEIRO!
@@ -406,14 +412,16 @@ class MacroGastricaModule(BaseModule):
                 
             elif mascara_upper in ['HEMO-FIT', 'HEMO-FIP']:
                 # Quantidade, med1, med2, med3 e quantidade na legenda igual a da macro
-                if str(campo_d).strip().lower() == 'mult':
+                # Usar campo_d_original para verificar se era 'mult' na planilha
+                if campo_d_original == 'mult':
                     valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
                 else:
                     valores = [campo_d, campo_e, campo_f, campo_g, campo_d]
                     
             else:
                 # Padrão original (máscaras antigas)
-                if str(campo_d).strip() == "6":
+                # Usar campo_d_original para verificar se era 'mult' na planilha
+                if campo_d_original == 'mult':
                     valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
                 else:
                     valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
@@ -1454,6 +1462,7 @@ class MacroGastricaModule(BaseModule):
                 codigo = exame_data['codigo']
                 mascara = exame_data['mascara']
                 campo_d = exame_data['campo_d']
+                campo_d_original = exame_data['campo_d_original']
                 campo_e = exame_data['campo_e']
                 campo_f = exame_data['campo_f']
                 campo_g = exame_data['campo_g']
@@ -1513,7 +1522,7 @@ class MacroGastricaModule(BaseModule):
                         log_message("✅ Browser recriado e login realizado novamente", "SUCCESS")
                     
                     # Processar este exame específico
-                    resultado = self.processar_exame(driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+                    resultado = self.processar_exame(driver, wait, codigo, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
@@ -1552,7 +1561,7 @@ class MacroGastricaModule(BaseModule):
                 except Exception as quit_error:
                     log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
 
-    def processar_exame(self, driver, wait, codigo, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def processar_exame(self, driver, wait, codigo, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         """Processa um exame individual"""
         try:
             # Verificar se a sessão do browser ainda está ativa
@@ -1582,7 +1591,7 @@ class MacroGastricaModule(BaseModule):
                 raise
 
             # Aguardar div de andamento aparecer
-            return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+            return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
 
         except Exception as e:
             error_message = str(e)
@@ -1602,7 +1611,7 @@ class MacroGastricaModule(BaseModule):
                 pass
             return {'status': 'erro', 'detalhes': error_message}
 
-    def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         """Aguarda a div de andamento e processa o exame"""
         # Aguardar div de andamento aparecer (otimizado)
         try:
@@ -1615,9 +1624,9 @@ class MacroGastricaModule(BaseModule):
         
         # Processar conclusão diretamente sem verificar SVG
         log_message("✅ Exame carregado - iniciando processo de conclusão", "SUCCESS")
-        return self.processar_conclusao_completa(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+        return self.processar_conclusao_completa(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
 
-    def processar_conclusao_completa(self, driver, wait, mascara, campo_d, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def processar_conclusao_completa(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
         try:
             # 1. Selecionar responsável pela macroscopia
             self.selecionar_responsavel_macroscopia(driver, wait, responsavel_macro)
@@ -1639,7 +1648,7 @@ class MacroGastricaModule(BaseModule):
             
             # 6. Abrir modal de variáveis e preencher campos (opcional)
             try:
-                self.abrir_modal_variaveis_e_preencher(driver, wait, mascara, campo_d, campo_e, campo_f, campo_g)
+                self.abrir_modal_variaveis_e_preencher(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g)
             except Exception as var_error:
                 log_message(f"⚠️ Erro no modal de variáveis: {var_error}", "WARNING")
                 log_message("⚠️ Continuando o processo sem as variáveis", "WARNING")
