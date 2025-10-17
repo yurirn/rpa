@@ -26,8 +26,8 @@ class PreparacaoLoteModule(BaseModule):
             df = pd.read_excel(file_path)
             unique_exames = df['Exame'].dropna().unique().tolist()
         elif modo_busca == "guia":
-            df = pd.read_excel(file_path, header=None)
-            unique_exames = df.iloc[:, 0].dropna().unique().tolist()
+            df = pd.read_excel(file_path)
+            unique_exames = df['N Guia'].dropna().unique().tolist()
         else:
             raise ValueError("Modo de busca inválido. Use 'exame' ou 'guia'.")
         return unique_exames
