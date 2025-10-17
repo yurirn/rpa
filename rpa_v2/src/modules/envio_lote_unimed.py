@@ -371,18 +371,14 @@ class XMLGeneratorAutomation(BaseModule):
                 log_message(f"⚠️ Aviso ao limpar campos: {e}", "WARNING")
             
             time.sleep(0.5)
-            
-            log_message("→ Configurando filtro de convênio Unimed...", "INFO")
+
             self.configurar_filtro_convenio_unimed()
             time.sleep(1)
-            
-            log_message("→ Configurando filtro 'Conferido Online'...", "INFO")
+
             self.configurar_filtro_conferido_online()
-            
-            log_message("→ Executando pesquisa de faturamento...", "INFO")
+
             self.executar_pesquisa_faturamento()
-            
-            log_message("→ Aguardando finalização da pesquisa...", "INFO")
+
             self.aguardar_finalizacao_pesquisa()
             time.sleep(1)
             
