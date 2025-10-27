@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
 from src.modules.base import BaseModule
-from src.modules.envio_lote_unimed import XMLGeneratorAutomation
+from src.modules.lote.envio_lote_unimed import XMLGeneratorAutomation
 
 load_dotenv()
 
