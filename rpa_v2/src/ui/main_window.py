@@ -40,6 +40,7 @@ class MainWindow:
         self.save_unimed_credentials = tk.BooleanVar(value=False)
 
         self.cobrar_de = tk.StringVar(value="C")
+        self.data_tipo = tk.StringVar(value="recepcao")
 
         self.modules = self.load_modules()
         self.module_id_map = {m['id']: m for m in self.modules}
@@ -158,6 +159,7 @@ class MainWindow:
         requires_unimed_credentials = module.get("requires_unimed_credentials") if module else False
         has_cobrar_de = module.get("has_cobrar_de") if module else False
         has_pular_para_laudos = module.get("has_pular_para_laudos") if module else False
+        has_data_tipo = module.get("has_data_tipo") if module else False
 
         # Armazenar referências dos módulos para uso posterior
         self.current_module_config = {
@@ -166,7 +168,8 @@ class MainWindow:
             'has_gera_xml_tiss': has_gera_xml_tiss,
             'requires_unimed_credentials': requires_unimed_credentials,
             'has_cobrar_de': has_cobrar_de,
-            'has_pular_para_laudos': has_pular_para_laudos
+            'has_pular_para_laudos': has_pular_para_laudos,
+            'has_data_tipo': has_data_tipo
         }
 
         row = 0
@@ -187,6 +190,20 @@ class MainWindow:
             self.descricao_tipo = ttk.Label(self.params_frame, text=self.get_descricao_tipo_busca("numero_exame"),
                                             foreground="blue")
             self.descricao_tipo.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
+            row += 1
+
+        if has_data_tipo:
+            ttk.Label(self.params_frame, text="Tipo de Data:").grid(row=row, column=0, sticky="w", pady=(15, 5))
+            data_frame = ttk.Frame(self.params_frame)
+            data_frame.grid(row=row, column=1, sticky="w", columnspan=2)
+            ttk.Radiobutton(data_frame, text="Data Recepção", variable=self.data_tipo, value="recepcao",
+                            command=self.on_data_tipo_changed).pack(side=tk.LEFT, padx=(0, 20))
+            ttk.Radiobutton(data_frame, text="Data Liberação", variable=self.data_tipo, value="liberacao",
+                            command=self.on_data_tipo_changed).pack(side=tk.LEFT)
+            row += 1
+            self.descricao_data = ttk.Label(self.params_frame, text=self.get_descricao_data_tipo("recepcao"),
+                                            foreground="blue")
+            self.descricao_data.grid(row=row, column=0, columnspan=3, sticky="w", pady=(5, 0))
             row += 1
 
         if has_cobrar_de:
@@ -264,9 +281,19 @@ class MainWindow:
         """Callback chamado quando a opção 'Gera XML TISS' é alterada"""
         self.update_unimed_credentials_visibility()
 
+    def on_data_tipo_changed(self):
+        """Callback chamado quando a opção 'Tipo de Data' é alterada"""
+        self.descricao_data.config(text=self.get_descricao_data_tipo(self.data_tipo.get()))
+
     def on_cobrar_de_changed(self):
         """Callback chamado quando a opção 'Cobrar de' é alterada"""
         self.descricao_cobrar.config(text=self.get_descricao_cobrar_de(self.cobrar_de.get()))
+
+    def get_descricao_data_tipo(self, tipo):
+        """Retorna a descrição do tipo de data selecionado"""
+        if tipo == "recepcao":
+            return "📅 Busca será feita pela data de recepção do exame."
+        return "📅 Busca será feita pela data de liberação do exame."
 
     def get_descricao_cobrar_de(self, tipo):
         """Retorna a descrição do tipo de cobrança selecionado"""
@@ -397,6 +424,8 @@ class MainWindow:
             params["cobrar_de"] = self.cobrar_de.get()
         if module.get("has_pular_para_laudos"):
             params["pular_para_laudos"] = self.pular_para_laudos.get()
+        if module.get("has_data_tipo"):
+            params["data_tipo"] = self.data_tipo.get()
         if module.get("requires_unimed_credentials"):
             unimed_user = self.unimed_user.get().strip()
             unimed_pass = self.unimed_password.get().strip()

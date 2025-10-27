@@ -891,6 +891,98 @@ class ConclusaoModule(BaseModule):
             log_message(f"❌ Erro crítico ao marcar checkbox acumular: {e}", "ERROR")
             raise
 
+    def aguardar_modal_carregamento_desaparecer(self, driver, wait, timeout=30):
+        """Aguarda o modal de carregamento desaparecer antes de continuar"""
+        try:
+            log_message("⏳ Aguardando modal de carregamento desaparecer...", "INFO")
+            
+            inicio = time.time()
+            modal_detectado = False
+            
+            while time.time() - inicio < timeout:
+                try:
+                    # Verificar se existe algum modal de carregamento visível
+                    modais_carregamento = driver.find_elements(By.XPATH, 
+                        "//div[contains(@class, 'modal') and contains(@class, 'loading')] | "
+                        "//div[contains(@class, 'loading')] | "
+                        "//div[contains(@class, 'spinner')] | "
+                        "//div[contains(@class, 'carregando')] | "
+                        "//div[contains(@id, 'loading')] | "
+                        "//div[contains(@id, 'carregando')] | "
+                        "//div[contains(text(), 'Carregando')] | "
+                        "div[contains(text(), 'Processando')] | "
+                        "//div[contains(text(), 'Aguarde')] | "
+                        "//div[contains(text(), 'Aguarde um momento')] | "
+                        "//div[contains(text(), 'Buscando')] | "
+                        "//div[contains(text(), 'Salvando')] | "
+                        "//div[contains(text(), 'Enviando')] | "
+                        "//div[contains(@class, 'overlay')] | "
+                        "//div[contains(@class, 'backdrop')]"
+                    )
+                    
+                    # Verificar se algum modal está visível
+                    modal_visivel = False
+                    for modal in modais_carregamento:
+                        try:
+                            if modal.is_displayed():
+                                modal_visivel = True
+                                if not modal_detectado:
+                                    log_message("🔍 Modal de carregamento detectado!", "INFO")
+                                    modal_detectado = True
+                                break
+                        except:
+                            continue
+                    
+                    # Verificar também elementos com estilo de loading
+                    if not modal_visivel:
+                        elementos_loading = driver.find_elements(By.XPATH,
+                            "//*[contains(@style, 'display: block') and (contains(@class, 'loading') or contains(@class, 'spinner') or contains(@class, 'overlay'))] | "
+                            "//*[contains(@style, 'visibility: visible') and contains(@class, 'loading')]"
+                        )
+                        
+                        for elemento in elementos_loading:
+                            try:
+                                if elemento.is_displayed():
+                                    modal_visivel = True
+                                    if not modal_detectado:
+                                        log_message("🔍 Elemento de loading detectado!", "INFO")
+                                        modal_detectado = True
+                                    break
+                            except:
+                                continue
+                    
+                    # Se não há modal visível, verificar se o campo está interagível
+                    if not modal_visivel:
+                        try:
+                            campo_codigo = driver.find_element(By.ID, "inputSearchCodBarra")
+                            if campo_codigo.is_enabled() and campo_codigo.is_displayed():
+                                log_message("✅ Modal de carregamento desapareceu! Campo está interagível.", "SUCCESS")
+                                return True
+                        except:
+                            pass
+                    
+                    # Log a cada 5 segundos
+                    if int(time.time() - inicio) % 5 == 0:
+                        log_message(f"⏳ Ainda aguardando carregamento... ({int(time.time() - inicio)}s)", "INFO")
+                    
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    # Se houver erro ao verificar modais, assumir que não há modal
+                    log_message(f"⚠️ Erro ao verificar modal: {e}", "WARNING")
+                    break
+            
+            if modal_detectado:
+                log_message("⚠️ Timeout aguardando modal de carregamento desaparecer", "WARNING")
+            else:
+                log_message("✅ Nenhum modal de carregamento detectado, continuando...", "SUCCESS")
+            
+            return True  # Sempre retorna True para não bloquear o processo
+            
+        except Exception as e:
+            log_message(f"❌ Erro ao aguardar modal de carregamento: {e}", "ERROR")
+            return True  # Retorna True para não bloquear o processo
+
     def acumular_exames_no_formulario(self, driver, wait, dados_exames):
         """Acumula todos os exames no formulário digitando os códigos"""
         try:
@@ -900,25 +992,65 @@ class ConclusaoModule(BaseModule):
                 codigo = exame_data['codigo']
                 log_message(f"➡️ Acumulando exame {i}/{len(dados_exames)}: {codigo}", "INFO")
                 
-                # Encontrar o campo de código de barras
-                campo_codigo = wait.until(
-                    EC.presence_of_element_located((By.ID, "inputSearchCodBarra"))
-                )
+                # Delay progressivo conforme mencionado pelo usuário
+                # Quanto mais exames acumulados, mais lento fica o sistema
+                delay_base = 1.0
+                delay_progressivo = min(delay_base + (i * 0.2), 5.0)  # Máximo de 5 segundos
                 
-                # Limpar o campo
-                campo_codigo.clear()
-                time.sleep(0.3)
+                tentativas = 0
+                max_tentativas = 3
                 
-                # Digitar o código
-                campo_codigo.send_keys(codigo)
-                time.sleep(0.5)
-                
-                # Pressionar Enter
-                campo_codigo.send_keys(Keys.ENTER)
-                log_message(f"✅ Código {codigo} digitado e Enter pressionado", "INFO")
-                
-                # Aguardar o loading/processamento
-                time.sleep(2)
+                while tentativas < max_tentativas:
+                    try:
+                        # Encontrar o campo de código de barras
+                        campo_codigo = wait.until(
+                            EC.element_to_be_clickable((By.ID, "inputSearchCodBarra"))
+                        )
+                        
+                        # Limpar o campo
+                        campo_codigo.clear()
+                        time.sleep(0.3)
+                        
+                        # Digitar o código
+                        campo_codigo.send_keys(codigo)
+                        time.sleep(0.5)
+                        
+                        # Pressionar Enter
+                        campo_codigo.send_keys(Keys.ENTER)
+                        log_message(f"✅ Código {codigo} digitado e Enter pressionado", "INFO")
+                        
+                        # Aguardar o modal de carregamento desaparecer antes de continuar
+                        self.aguardar_modal_carregamento_desaparecer(driver, wait, timeout=30)
+                        
+                        # Aguardar delay progressivo para dar tempo ao sistema processar
+                        log_message(f"⏳ Aguardando {delay_progressivo:.1f}s para sistema processar...", "INFO")
+                        time.sleep(delay_progressivo)
+                        
+                        # Verificar se o campo está realmente interagível antes de continuar
+                        try:
+                            campo_codigo = wait.until(
+                                EC.element_to_be_clickable((By.ID, "inputSearchCodBarra"))
+                            )
+                            log_message(f"✅ Campo de código está interagível para próximo exame", "SUCCESS")
+                            break  # Sucesso, sair do loop de tentativas
+                        except Exception as e:
+                            log_message(f"⚠️ Campo não está interagível ainda: {e}", "WARNING")
+                            tentativas += 1
+                            if tentativas < max_tentativas:
+                                log_message(f"🔄 Tentativa {tentativas + 1}/{max_tentativas} em 3 segundos...", "WARNING")
+                                time.sleep(3)
+                            else:
+                                log_message(f"⚠️ Máximo de tentativas atingido, continuando mesmo assim...", "WARNING")
+                        
+                    except Exception as e:
+                        tentativas += 1
+                        log_message(f"❌ Erro na tentativa {tentativas}: {e}", "ERROR")
+                        if tentativas < max_tentativas:
+                            log_message(f"🔄 Tentando novamente em 5 segundos...", "WARNING")
+                            time.sleep(5)
+                        else:
+                            log_message(f"❌ Máximo de tentativas atingido para exame {codigo}", "ERROR")
+                            raise
                 
                 # Verificar se o exame foi adicionado na tabela
                 try:

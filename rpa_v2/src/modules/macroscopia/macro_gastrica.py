@@ -226,6 +226,42 @@ class MacroGastricaModule(BaseModule):
             except:
                 pass
 
+    def clicar_elemento_robusto(self, driver, wait, elemento, nome_elemento="elemento"):
+        """Clica em um elemento de forma robusta, lidando com elementos interceptados"""
+        try:
+            # Rolar até o elemento para garantir visibilidade
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", elemento)
+            time.sleep(1)
+            
+            # Verificar se há elementos sobrepostos e aguardar eles desaparecerem
+            try:
+                # Aguardar elementos sobrepostos desaparecerem (como dropdowns, tooltips, etc.)
+                WebDriverWait(driver, 3).until_not(
+                    EC.presence_of_element_located((By.XPATH, "//li[contains(@class, 'dropdown-menu') or contains(@class, 'show')]"))
+                )
+            except:
+                pass  # Se não houver elementos sobrepostos, continua
+            
+            # Tentar clicar normalmente primeiro
+            try:
+                elemento.click()
+                log_message(f"✅ Clicou em {nome_elemento}", "SUCCESS")
+                return True
+            except Exception as click_error:
+                log_message(f"⚠️ Erro no clique normal em {nome_elemento}: {click_error}", "WARNING")
+                # Se falhar, tentar clique via JavaScript
+                try:
+                    driver.execute_script("arguments[0].click();", elemento)
+                    log_message(f"✅ Clicou em {nome_elemento} (via JavaScript)", "SUCCESS")
+                    return True
+                except Exception as js_error:
+                    log_message(f"❌ Erro no clique JavaScript em {nome_elemento}: {js_error}", "ERROR")
+                    return False
+                    
+        except Exception as e:
+            log_message(f"❌ Erro geral ao clicar em {nome_elemento}: {e}", "ERROR")
+            return False
+
     def selecionar_responsavel_macroscopia(self, driver, wait, responsavel_macro):
         """Seleciona o responsável pela macroscopia conforme o nome recebido (nome curto)"""
         # Mapper de nomes: primeiro nome em caixa alta -> nome completo
@@ -1115,11 +1151,20 @@ class MacroGastricaModule(BaseModule):
             
             # Rolar até o botão para garantir visibilidade
             driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_salvar_fragmentos)
-            time.sleep(0.5)
+            time.sleep(1)  # Aumentar tempo de espera
             
-            # Clicar no botão
-            botao_salvar_fragmentos.click()
-            log_message("💾 Clicou em Salvar fragmentos", "SUCCESS")
+            # Verificar se há elementos sobrepostos e aguardar eles desaparecerem
+            try:
+                # Aguardar elementos sobrepostos desaparecerem (como dropdowns, tooltips, etc.)
+                WebDriverWait(driver, 3).until_not(
+                    EC.presence_of_element_located((By.XPATH, "//li[contains(@class, 'dropdown-menu') or contains(@class, 'show')]"))
+                )
+            except:
+                pass  # Se não houver elementos sobrepostos, continua
+            
+            # Usar função robusta para clicar
+            if not self.clicar_elemento_robusto(driver, wait, botao_salvar_fragmentos, "Salvar fragmentos"):
+                raise Exception("Não foi possível clicar no botão Salvar fragmentos")
             
             # Aguardar que o spinner desapareça após salvar
             self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
@@ -1132,10 +1177,10 @@ class MacroGastricaModule(BaseModule):
                 botao_titulo = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//a[@title='Salvar' and contains(@class, 'btn-primary')]"))
                 )
-                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_titulo)
-                time.sleep(0.5)
-                botao_titulo.click()
-                log_message("💾 Clicou em Salvar fragmentos (por título)", "SUCCESS")
+                # Usar função robusta para clicar
+                if self.clicar_elemento_robusto(driver, wait, botao_titulo, "Salvar fragmentos (por título)"):
+                    log_message("💾 Clicou em Salvar fragmentos (por título)", "SUCCESS")
+                
                 self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
                 return
             except:
@@ -1146,10 +1191,10 @@ class MacroGastricaModule(BaseModule):
                 botao_texto = wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//a[contains(@class, 'btn-primary') and contains(text(), 'Salvar')]"))
                 )
-                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_texto)
-                time.sleep(0.5)
-                botao_texto.click()
-                log_message("💾 Clicou em Salvar fragmentos (por texto)", "SUCCESS")
+                # Usar função robusta para clicar
+                if self.clicar_elemento_robusto(driver, wait, botao_texto, "Salvar fragmentos (por texto)"):
+                    log_message("💾 Clicou em Salvar fragmentos (por texto)", "SUCCESS")
+                
                 self.aguardar_spinner_desaparecer(driver, wait, timeout=15)
                 return
             except:
