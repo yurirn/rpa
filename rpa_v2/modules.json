@@ -81,5 +81,17 @@
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
     "requires_unimed_credentials": true
+  },
+  {
+    "id": "fatura_mensal",
+    "name": "Fatura Mensal",
+    "description": "Automatiza o processo de fatura mensal com opções de data e tipo de cobrança",
+    "module_path": "modules.fatura_mensal",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false,
+    "has_data_tipo": true,
+    "has_cobrar_de": true
   }
 ]
