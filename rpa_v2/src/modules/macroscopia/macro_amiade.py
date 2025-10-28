@@ -460,13 +460,15 @@ class MacroAmiadeModule(BaseModule):
         time.sleep(0.3)
 
     def definir_grupo(self, driver, wait):
-        """Define o grupo como 'Seios da Face' usando JavaScript"""
+        """Define o grupo como 'Seios da Face' usando JavaScript com retry"""
         try:
             grupo_selecionado = 'Seios da Face'
+            max_tentativas = 5
+            tentativa = 0
 
             # Verificar se o input existe e qual o valor atual
             try:
-                input_grupo = driver.find_element(By.ID, "grupo")
+                input_grupo = driver.find_element(By.ID, "idRegiao")
                 valor_atual = input_grupo.get_attribute("value")
 
                 if valor_atual == grupo_selecionado:
@@ -475,107 +477,136 @@ class MacroAmiadeModule(BaseModule):
                 elif valor_atual and valor_atual.strip():
                     log_message(f"⚠️ Valor atual do campo grupo: '{valor_atual}' - será substituído", "WARNING")
             except:
-                log_message("⚠️ Campo grupo não encontrado", "WARNING")
+                log_message("⚠️ Campo grupo não encontrado inicialmente", "WARNING")
 
-            # Procurar especificamente pelo campo de grupo
-            script = """
-            // Procurar especificamente pelo campo de grupo que tem o input com id="idRegiao"
-            var inputGrupo = document.getElementById('idRegiao');
-            if (inputGrupo) {
-                // Encontrar a âncora que está no mesmo td que o input idRegiao
-                var parentTd = inputGrupo.closest('td');
-                if (parentTd) {
-                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                    if (ancora && ancora.offsetParent !== null) {
-                        return ancora;
-                    }
-                }
-            }
+            while tentativa < max_tentativas:
+                try:
+                    tentativa += 1
+                    log_message(f"🔄 Tentativa {tentativa} de {max_tentativas} para clicar no campo de grupo", "INFO")
 
-            // Fallback: procurar por âncoras que estejam próximas a inputs de grupo
-            var inputsGrupo = document.querySelectorAll('input[id*="Regiao"], input[data-autocompleteurl*="consultarRegiao"]');
-            for (var i = 0; i < inputsGrupo.length; i++) {
-                var input = inputsGrupo[i];
-                var parentTd = input.closest('td');
-                if (parentTd) {
-                    var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
-                    if (ancora && ancora.offsetParent !== null) {
-                        return ancora;
-                    }
-                }
-            }
-
-            // Último fallback: procurar por âncoras que não sejam de procedimento
-            var fragmentosContainer = document.getElementById('fragmentosContainer');
-            if (fragmentosContainer) {
-                var elementos = fragmentosContainer.querySelectorAll('a[class*="table-editable-ancora"]');
-                for (var i = 0; i < elementos.length; i++) {
-                    var elemento = elementos[i];
-                    if (elemento.textContent.includes('Vazio') && elemento.offsetParent !== null) {
-                        var parentTd = elemento.closest('td');
-                        if (parentTd && !parentTd.querySelector('input[id*="procedimento"]')) {
-                            return elemento;
+                    # Procurar a âncora "Vazio" específica do campo de grupo
+                    script = """
+                    var inputRegiao = document.getElementById('idRegiao');
+                    if (inputRegiao) {
+                        var parentTd = inputRegiao.closest('td');
+                        if (parentTd) {
+                            var ancora = parentTd.querySelector('a.table-editable-ancora');
+                            if (ancora && ancora.offsetParent !== null) {
+                                return ancora;
+                            }
                         }
                     }
-                }
-            }
-            return null;
-            """
-            campo_grupo = driver.execute_script(script)
+                    return null;
+                    """
+                    campo_grupo_ancora = driver.execute_script(script)
 
-            log_message(campo_grupo, "SUCCESS")
+                    if not campo_grupo_ancora:
+                        log_message(f"⚠️ Âncora de grupo não encontrada na tentativa {tentativa}", "WARNING")
+                        time.sleep(0.5)
+                        continue
 
-            if campo_grupo:
-                # Usar JavaScript para clicar no elemento
-                driver.execute_script("arguments[0].click();", campo_grupo)
-                log_message(f"🔍 Clicou no campo de grupo via JS", "INFO")
-                time.sleep(0.5)
+                    # Scroll até o elemento e aguardar
+                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});",
+                                          campo_grupo_ancora)
+                    time.sleep(0.3)
 
-                # Aguardar o campo de input aparecer e preencher via JavaScript
-                input_grupo = wait.until(
-                    EC.presence_of_element_located((By.ID, "idRegiao"))
-                )
-
-                # Limpar o campo primeiro
-                driver.execute_script("arguments[0].value = '';", input_grupo)
-
-                # Preencher via JavaScript
-                driver.execute_script("""
-                    arguments[0].value = arguments[1];
-                    arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-                    arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-                """, input_grupo, grupo_selecionado)
-
-                # Aguardar um pouco para o dropdown aparecer e tentar clicar na opção
-                time.sleep(0.5)
-
-                # Tentar clicar na opção do dropdown com timeout menor
-                try:
-                    # Aguardar até 3 segundos pela opção aparecer
-                    wait_dropdown = WebDriverWait(driver, 3)
-                    opcao_dropdown = wait_dropdown.until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, f"//li[contains(@class, 'active')]//a[contains(text(), '{grupo_selecionado}')]"))
-                    )
-                    opcao_dropdown.click()
-                    log_message(f"✅ Selecionou '{grupo_selecionado}' no dropdown", "SUCCESS")
-                except:
-                    # Se não conseguir clicar no dropdown rapidamente, pressionar Enter
+                    # Clicar usando diferentes métodos
                     try:
-                        input_grupo.send_keys(Keys.ENTER)
-                        log_message(f"✍️ Pressionou Enter para confirmar '{grupo_selecionado}' (dropdown não apareceu)",
-                                    "SUCCESS")
+                        # Método 1: Click JavaScript direto
+                        driver.execute_script("arguments[0].click();", campo_grupo_ancora)
+                        log_message(f"🖱️ Clicou na âncora via JavaScript (tentativa {tentativa})", "INFO")
                     except:
-                        # Último recurso: clicar fora para fechar o dropdown
-                        driver.execute_script("document.body.click();")
-                        log_message(f"🔍 Clicou fora para fechar dropdown de '{grupo_selecionado}'", "INFO")
+                        # Método 2: Click Selenium tradicional
+                        campo_grupo_ancora.click()
+                        log_message(f"🖱️ Clicou na âncora via Selenium (tentativa {tentativa})", "INFO")
 
-                time.sleep(0.5)
-            else:
-                log_message("⚠️ Campo de grupo não encontrado ou não visível", "WARNING")
+                    time.sleep(0.5)
+
+                    # Validar se o input ficou visível após o clique
+                    input_grupo = driver.find_element(By.ID, "idRegiao")
+                    is_visible = driver.execute_script("""
+                        var input = arguments[0];
+                        var style = window.getComputedStyle(input);
+                        return style.display !== 'none' && style.visibility !== 'hidden' && input.offsetParent !== null;
+                    """, input_grupo)
+
+                    if not is_visible:
+                        log_message(f"⚠️ Input ainda não está visível após clique (tentativa {tentativa})", "WARNING")
+                        time.sleep(0.3)
+                        continue
+
+                    log_message(f"✅ Input de grupo está visível e pronto para preenchimento", "SUCCESS")
+
+                    # Limpar e preencher o campo
+                    driver.execute_script("""
+                        var input = arguments[0];
+                        input.value = '';
+                        input.focus();
+                        input.value = arguments[1];
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                    """, input_grupo, grupo_selecionado)
+
+                    log_message(f"✅ Grupo '{grupo_selecionado}' preenchido no campo", "SUCCESS")
+                    time.sleep(0.5)
+
+                    # Tentar selecionar da lista de autocomplete
+                    try:
+                        # Aguardar o dropdown aparecer
+                        dropdown = wait.until(
+                            EC.presence_of_element_located(
+                                (By.CSS_SELECTOR, "ul.typeahead.dropdown-menu[style*='display: block']"))
+                        )
+
+                        # Procurar a opção no dropdown
+                        opcao_autocomplete = wait.until(
+                            EC.element_to_be_clickable((By.XPATH,
+                                                        f"//ul[@class='typeahead dropdown-menu']//a[contains(text(), '{grupo_selecionado}')]"))
+                        )
+                        opcao_autocomplete.click()
+                        log_message(f"✅ Opção '{grupo_selecionado}' selecionada do autocomplete", "SUCCESS")
+                        time.sleep(0.3)
+
+                        # Validar se o valor foi realmente preenchido
+                        valor_final = input_grupo.get_attribute("value")
+                        if valor_final == grupo_selecionado:
+                            log_message(f"✅ Validação final: Grupo definido como '{grupo_selecionado}'", "SUCCESS")
+                            return
+                        else:
+                            log_message(f"⚠️ Valor final não corresponde: '{valor_final}' != '{grupo_selecionado}'",
+                                        "WARNING")
+                            continue
+
+                    except Exception as autocomplete_error:
+                        log_message(f"⚠️ Autocomplete não apareceu ou não foi clicável: {autocomplete_error}",
+                                    "WARNING")
+                        # Tentar confirmar com Enter
+                        try:
+                            input_grupo.send_keys(Keys.ENTER)
+                            time.sleep(0.3)
+                            log_message("✅ Confirmado com Enter", "SUCCESS")
+
+                            # Validar se o valor foi preenchido
+                            valor_final = input_grupo.get_attribute("value")
+                            if valor_final == grupo_selecionado:
+                                return
+                        except:
+                            # Clicar fora para fechar o dropdown
+                            driver.execute_script("document.body.click();")
+                            time.sleep(0.3)
+                        continue
+
+                except Exception as e:
+                    log_message(f"⚠️ Erro na tentativa {tentativa}: {e}", "WARNING")
+                    time.sleep(0.5)
+                    continue
+
+            # Se chegou aqui, esgotou todas as tentativas
+            raise Exception(f"Não foi possível definir o grupo após {max_tentativas} tentativas")
 
         except Exception as e:
-            log_message(f"⚠️ Erro ao definir grupo: {e}", "WARNING")
+            log_message(f"❌ Erro ao definir grupo: {e}", "ERROR")
             raise
 
     def definir_representacao_secao(self, driver, wait):
