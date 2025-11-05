@@ -113,29 +113,82 @@ class PreparacaoLoteModule(BaseModule):
                 By.XPATH, "//a[contains(@class, 'setupAjax') and contains(text(), 'Preparar exames para fatura')]"
             ))).click()
             time.sleep(1)
+
             for exame in exames_unicos:
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
                     break
                 try:
                     log_message(f"➡️ Processando {modo_busca}: {exame}", "INFO")
+
+                    # Log: Identificando campo de busca
                     campo_id = "numeroGuia" if modo_busca == "guia" else "numeroExame"
+                    log_message(f"🔍 Localizando campo de busca: {campo_id}", "INFO")
+
                     campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
+                    log_message(f"✅ Campo {campo_id} localizado", "INFO")
+
                     campo_exame.clear()
+                    log_message(f"🧹 Campo limpo", "INFO")
+
                     campo_exame.send_keys(exame)
-                    wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento"))).click()
+                    log_message(f"⌨️ Valor '{exame}' inserido no campo", "INFO")
+
+                    time.sleep(0.5)
+
+                    log_message("🔎 Clicando no botão de pesquisa...", "INFO")
+                    try:
+                        # Estratégia 1: Aguardar elemento estar clicável
+                        botao_pesquisa = wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento")))
+
+                        # Tentar clicar normalmente
+                        try:
+                            botao_pesquisa.click()
+                            log_message("✅ Botão de pesquisa clicado (click normal)", "INFO")
+                        except Exception as e:
+                            log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
+
+                            # Estratégia 2: Click via JavaScript
+                            driver.execute_script("arguments[0].click();", botao_pesquisa)
+                            log_message("✅ Botão de pesquisa clicado (JavaScript)", "INFO")
+
+                    except Exception as e:
+                        log_message(f"⚠️ Erro ao clicar no botão. Tentando localizar novamente: {e}", "WARNING")
+
+                        # Estratégia 3: Localizar novamente e usar JavaScript diretamente
+                        try:
+                            time.sleep(1)
+                            botao_retry = driver.find_element(By.ID, "pesquisaFaturamento")
+
+                            # Remover atributo disabled se existir
+                            driver.execute_script("arguments[0].removeAttribute('disabled');", botao_retry)
+
+                            # Scroll e click
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao_retry)
+                            time.sleep(0.5)
+                            driver.execute_script("arguments[0].click();", botao_retry)
+                            log_message("✅ Botão de pesquisa clicado (retry com JavaScript)", "INFO")
+                        except Exception as e2:
+                            log_message(f"❌ Falha ao clicar no botão após tentativas: {e2}", "ERROR")
+                            raise
+
                     try:
                         modal_carregando = driver.find_element(By.XPATH,
-                            "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
+                                                               "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
                         if modal_carregando.is_displayed():
                             log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
                             WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
                             log_message("✅ Modal de carregamento fechado", "INFO")
                     except Exception:
                         log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
+
                     time.sleep(1)
+
+                    log_message("📋 Validando resultados da tabela...", "INFO")
                     try:
                         tbody_rows = driver.find_elements(By.CSS_SELECTOR, "#tabelaPreFaturamentoTbody tr")
+                        log_message(f"📊 Encontradas {len(tbody_rows)} linha(s) na tabela", "INFO")
+
                         if len(tbody_rows) == 0:
                             log_message(f"⚠️ Nenhum resultado encontrado para {exame}. Pulando.", "WARNING")
                             resultados.append({"exame": exame, "status": "sem_resultados"})
@@ -144,18 +197,103 @@ class PreparacaoLoteModule(BaseModule):
                         log_message(f"⚠️ Erro ao validar resultados da tabela: {e}", "WARNING")
                         resultados.append({"exame": exame, "status": "erro_validacao", "erro": str(e)})
                         continue
-                    wait.until(EC.element_to_be_clickable((By.ID, "checkTodosPreFaturar"))).click()
-                    acoes_btn = wait.until(EC.element_to_be_clickable((
-                        By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
-                    )))
-                    acoes_btn.click()
+
                     time.sleep(1)
+
+                    log_message("☑️ Marcando checkbox 'checkTodosPreFaturar'...", "INFO")
+                    try:
+                        # Estratégia 1: Aguardar elemento estar clicável
+                        checkbox = wait.until(EC.element_to_be_clickable((By.ID, "checkTodosPreFaturar")))
+
+                        # Tentar clicar normalmente
+                        try:
+                            checkbox.click()
+                            log_message("✅ Checkbox marcado (click normal)", "INFO")
+                        except Exception as e:
+                            log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
+
+                            # Estratégia 2: Click via JavaScript
+                            driver.execute_script("arguments[0].click();", checkbox)
+                            log_message("✅ Checkbox marcado (JavaScript)", "INFO")
+
+                    except Exception as e:
+                        log_message(f"⚠️ Erro ao marcar checkbox. Tentando localizar novamente: {e}", "WARNING")
+
+                        # Estratégia 3: Localizar novamente e usar JavaScript diretamente
+                        try:
+                            time.sleep(1)
+                            checkbox_retry = driver.find_element(By.ID, "checkTodosPreFaturar")
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", checkbox_retry)
+                            time.sleep(0.5)
+                            driver.execute_script("arguments[0].click();", checkbox_retry)
+                            log_message("✅ Checkbox marcado (retry com JavaScript)", "INFO")
+                        except Exception as e2:
+                            log_message(f"❌ Falha ao marcar checkbox após tentativas: {e2}", "ERROR")
+                            raise
+
+                    # Aguardar modal de carregamento desaparecer após marcar checkbox
+                    log_message("⏳ Aguardando processamento após marcar checkbox...", "INFO")
+                    try:
+                        WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+                        log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
+                        WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                        log_message("✅ Modal de carregamento fechado", "INFO")
+                    except Exception:
+                        log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
+
+                    time.sleep(1)
+
+                    log_message("🎬 Clicando no botão 'Ações'...", "INFO")
+                    try:
+                        # Estratégia 1: Aguardar elemento estar clicável
+                        acoes_btn = wait.until(EC.element_to_be_clickable((
+                            By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
+                        )))
+
+                        # Scroll até o elemento
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", acoes_btn)
+                        time.sleep(0.5)
+
+                        # Tentar clicar normalmente
+                        try:
+                            acoes_btn.click()
+                            log_message("✅ Botão 'Ações' clicado (click normal)", "INFO")
+                        except Exception as e:
+                            log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
+
+                            # Estratégia 2: Click via JavaScript
+                            driver.execute_script("arguments[0].click();", acoes_btn)
+                            log_message("✅ Botão 'Ações' clicado (JavaScript)", "INFO")
+
+                    except Exception as e:
+                        log_message(f"⚠️ Erro ao clicar no botão 'Ações'. Tentando localizar novamente: {e}", "WARNING")
+
+                        # Estratégia 3: Localizar novamente e usar JavaScript diretamente
+                        try:
+                            time.sleep(1)
+                            acoes_retry = driver.find_element(By.XPATH,
+                                                              "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]")
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", acoes_retry)
+                            time.sleep(0.5)
+                            driver.execute_script("arguments[0].click();", acoes_retry)
+                            log_message("✅ Botão 'Ações' clicado (retry com JavaScript)", "INFO")
+                        except Exception as e2:
+                            log_message(f"❌ Falha ao clicar no botão 'Ações' após tentativas: {e2}", "ERROR")
+                            raise
+
+                    time.sleep(1)
+
+                    log_message("📡 Executando script para selecionar status 'Online'...", "INFO")
                     driver.execute_script("""
                         const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
                         if (onlineBtn) { onlineBtn.click(); }
                     """)
+                    log_message("✅ Script executado - Status 'Online' selecionado", "INFO")
+
                     time.sleep(1)
+
                     if modo_busca == "guia":
+                        log_message("🔄 Modo guia detectado - Aguardando processamento adicional...", "INFO")
                         try:
                             WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
                             log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
@@ -164,11 +302,15 @@ class PreparacaoLoteModule(BaseModule):
                         except Exception:
                             log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
                             time.sleep(1)
+
                     resultados.append({"exame": exame, "status": "sucesso"})
                     log_message(f"✅ {modo_busca.title()} {exame} processado com sucesso.", "SUCCESS")
+
                 except Exception as e:
                     resultados.append({"exame": exame, "status": "erro", "erro": str(e)})
                     log_message(f"❌ Erro ao processar {exame}: {e}", "ERROR")
+                    log_message(f"🔍 Detalhes do erro: {type(e).__name__}", "ERROR")
+
             total = len(resultados)
             sucesso = [r for r in resultados if r["status"] == "sucesso"]
             erro = [r for r in resultados if r["status"] == "erro"]
