@@ -237,13 +237,8 @@ class MacroscopiaModule(BaseModule):
         if mascara:
             self.digitar_mascara_e_buscar(driver, wait, mascara)
             self.salvar_macroscopia(driver, wait)
-            self.selecionar_painel_papanicolau(driver, wait)
+            #self.selecionar_painel_papanicolau(driver, wait)
             self.enviar_proxima_etapa(driver, wait)
-            if codigo:
-                self.preencher_campo_codigo_novamente(driver, wait, codigo)
-                if citotecnica_nome:
-                    self.selecionar_citotecnica(driver, wait, citotecnica_nome)
-                self.fechar_exame(driver, wait)
         else:
             log_message("⚠️ Nenhuma máscara encontrada, pulando busca", "WARNING")
         return {'status': 'sucesso'}
@@ -344,6 +339,7 @@ class MacroscopiaModule(BaseModule):
                     self.clicar_elemento(driver, modal_close_button)
             except Exception:
                 pass
+            codigos_processados = []
             for i, exame_data in enumerate(dados_exames, 1):
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
@@ -351,6 +347,7 @@ class MacroscopiaModule(BaseModule):
                 codigo = exame_data['codigo']
                 mascara = exame_data['mascara']
                 citotecnica_nome = exame_data.get('citotecnica')
+                codigos_processados.append(codigo)
                 log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (máscara: {mascara}) - Citotécnica: {citotecnica_nome}", "INFO")
                 resultado = self.processar_exame(driver, wait, codigo, mascara, citotecnica_nome)
                 resultados.append({
