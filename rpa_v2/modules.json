@@ -83,6 +83,16 @@
     "requires_unimed_credentials": false
   },
   {
+    "id": "macro_prost",
+    "name": "Macro Prost",
+    "description": "Realiza o processo de preenchimento das mascaras PROSTATA12F E PROSTATA6B",
+    "module_path": "modules.macroscopia.macro_prost",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
+  },
+  {
     "id": "guia_unimed",
     "name": "Guia Unimed",
     "description": "Automatiza o processo de guias da Unimed",
