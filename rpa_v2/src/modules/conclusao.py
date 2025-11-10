@@ -96,44 +96,63 @@ class ConclusaoModule(BaseModule):
     def verificar_svg_conclusao(self, driver) -> bool:
         """Verifica se existe o SVG na etapa Conclusão"""
         try:
-            # Método 1: Procurar pelo link de Conclusão que contenha o SVG arrow-right
-            try:
-                conclusao_link = driver.find_element(
-                    By.XPATH, 
-                    "//a[@data-id='C' and contains(., 'Conclusão')]//svg[@data-icon='arrow-right']"
+            estrategias_busca = [
+                (
+                    "data-id",
+                    "//a[@data-id='C']"
+                ),
+                (
+                    "data-stringjson",
+                    "//a[contains(@data-stringjson, '\"C\"')]"
+                ),
+                (
+                    "texto",
+                    "//a[contains(normalize-space(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÂÊÔÃÕÇ', "
+                    "'abcdefghijklmnopqrstuvwxyzáéíóúâêôãõç')), 'conclus')]"
                 )
-                if conclusao_link:
-                    log_message("✅ SVG arrow-right encontrado na etapa Conclusão", "INFO")
-                    return True
-            except:
-                pass
-            
-            # Método 2: Verificar se o link de Conclusão está clicável/ativo
-            try:
-                conclusao_link = driver.find_element(By.XPATH, "//a[@data-id='C' and contains(., 'Conclusão')]")
-                # Verificar se o link não tem classe que indica inativo
-                classe_link = conclusao_link.get_attribute("class") or ""
-                if "disabled" not in classe_link.lower() and "inactive" not in classe_link.lower():
-                    # Verificar se existe SVG dentro do link
-                    svgs = conclusao_link.find_elements(By.TAG_NAME, "svg")
-                    if svgs:
-                        log_message(f"✅ SVG encontrado na etapa Conclusão (método 2)", "INFO")
-                        return True
-            except:
-                pass
-                
-            # Método 3: Verificar qualquer SVG com arrow-right próximo à Conclusão
+            ]
+
+            for identificador, xpath in estrategias_busca:
+                try:
+                    links = driver.find_elements(By.XPATH, xpath)
+                    for link in links:
+                        try:
+                            classe_link = (link.get_attribute("class") or "").lower()
+                            if "disabled" in classe_link or "inactive" in classe_link:
+                                continue
+                        except Exception:
+                            pass
+
+                        try:
+                            texto_link = (link.text or "").lower()
+                        except Exception:
+                            texto_link = ""
+
+                        if identificador == "texto" and "conclus" not in texto_link:
+                            continue
+
+                        svgs = link.find_elements(By.TAG_NAME, "svg")
+                        if svgs:
+                            log_message(f"✅ SVG encontrado na etapa Conclusão (método: {identificador})", "INFO")
+                            return True
+                except Exception:
+                    continue
+
+            # Método extra: procurar qualquer SVG arrow-right e verificar ancestrais com texto Conclusão
             try:
                 svg_arrows = driver.find_elements(By.XPATH, "//svg[@data-icon='arrow-right']")
                 for svg in svg_arrows:
-                    # Verificar se o SVG está próximo ao texto "Conclusão"
-                    parent = svg.find_element(By.XPATH, "..")
-                    if "conclusão" in parent.text.lower():
-                        log_message("✅ SVG arrow-right encontrado próximo à Conclusão (método 3)", "INFO")
-                        return True
-            except:
+                    try:
+                        parent = svg.find_element(By.XPATH, "./ancestor::a[1]")
+                        texto_parent = (parent.text or "").lower()
+                        if "conclus" in texto_parent:
+                            log_message("✅ SVG arrow-right encontrado próximo à Conclusão (método: ancestral)", "INFO")
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
                 pass
-            
+
             log_message("⚠️ SVG não encontrado na etapa Conclusão", "WARNING")
             return False
             
