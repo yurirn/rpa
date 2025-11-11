@@ -39,6 +39,11 @@ class MainWindow:
         self.show_unimed_password = tk.BooleanVar(value=False)
         self.save_unimed_credentials = tk.BooleanVar(value=False)
 
+        self.hospital_user = tk.StringVar()
+        self.hospital_password = tk.StringVar()
+        self.show_hospital_password = tk.BooleanVar(value=False)
+        self.save_hospital_credentials = tk.BooleanVar(value=False)
+
         self.cobrar_de = tk.StringVar(value="C")
         self.data_tipo = tk.StringVar(value="recepcao")
 
@@ -167,6 +172,7 @@ class MainWindow:
             'tipo_busca': tipo_busca,
             'has_gera_xml_tiss': has_gera_xml_tiss,
             'requires_unimed_credentials': requires_unimed_credentials,
+            'requires_hospital_credentials': module.get("requires_hospital_credentials") if module else False,
             'has_cobrar_de': has_cobrar_de,
             'has_pular_para_laudos': has_pular_para_laudos,
             'has_data_tipo': has_data_tipo
@@ -271,6 +277,40 @@ class MainWindow:
             self.update_unimed_credentials_visibility()
             row += 1
 
+        if self.current_module_config.get('requires_hospital_credentials'):
+            self.hospital_credentials_frame = ttk.Frame(self.params_frame)
+            self.hospital_credentials_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+            self.hospital_credentials_frame.columnconfigure(1, weight=1)
+
+            ttk.Label(self.hospital_credentials_frame, text="Credenciais Hospitalar:", font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=3, sticky="w")
+
+            ttk.Label(self.hospital_credentials_frame, text="Usuário Hospitalar:").grid(row=1, column=0, sticky="w", pady=(5, 0))
+            hospital_user_entry = ttk.Entry(self.hospital_credentials_frame, textvariable=self.hospital_user, width=30)
+            hospital_user_entry.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+
+            ttk.Label(self.hospital_credentials_frame, text="Senha Hospitalar:").grid(row=2, column=0, sticky="w", pady=(5, 0))
+            hospital_pass_frame = ttk.Frame(self.hospital_credentials_frame)
+            hospital_pass_frame.grid(row=2, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
+
+            self.hospital_password_entry = ttk.Entry(hospital_pass_frame, textvariable=self.hospital_password, show="*", width=25)
+            self.hospital_password_entry.pack(side=tk.LEFT)
+
+            ttk.Checkbutton(
+                hospital_pass_frame,
+                text="Mostrar",
+                variable=self.show_hospital_password,
+                command=self.toggle_hospital_password_visibility
+            ).pack(side=tk.LEFT, padx=(10, 0))
+
+            self.save_hospital_check = ttk.Checkbutton(
+                self.hospital_credentials_frame,
+                text="Salvar credenciais Hospitalar neste computador",
+                variable=self.save_hospital_credentials,
+                command=self.on_save_hospital_credentials_changed
+            )
+            self.save_hospital_check.grid(row=3, column=0, columnspan=3, sticky="w", pady=(5, 0))
+            row += 1
+
         if not requires_excel and not has_gera_xml_tiss:
             ttk.Label(self.params_frame, text="Os parâmetros aparecerão aqui quando um módulo for selecionado", foreground="gray").pack(pady=20)
 
@@ -363,6 +403,9 @@ class MainWindow:
     def toggle_unimed_password_visibility(self):
         self.unimed_password_entry.config(show="" if self.show_unimed_password.get() else "*")
 
+    def toggle_hospital_password_visibility(self):
+        self.hospital_password_entry.config(show="" if self.show_hospital_password.get() else "*")
+
     def validate_credentials(self):
         username = self.username.get().strip()
         password = self.password.get().strip()
@@ -436,6 +479,16 @@ class MainWindow:
             params.update({
                 "unimed_user": unimed_user,
                 "unimed_pass": unimed_pass
+            })
+        if module.get("requires_hospital_credentials"):
+            hospital_user = self.hospital_user.get().strip()
+            hospital_pass = self.hospital_password.get().strip()
+            if not hospital_user or not hospital_pass:
+                messagebox.showwarning("Credenciais Hospitalar", "Preencha usuário e senha do Hospitalar!")
+                return
+            params.update({
+                "hospital_user": hospital_user,
+                "hospital_pass": hospital_pass
             })
         def run_in_thread():
             try:
@@ -528,6 +581,29 @@ class MainWindow:
         except:
             return ""
 
+    def _encode_hospital_password(self, password):
+        """Codifica a senha do Hospitalar usando base64 para armazenamento local"""
+        if not password:
+            return ""
+        hospital_user = self.hospital_user.get().strip()
+        salt = f"{hospital_user}_hospital_salt"
+        password_with_salt = f"{password}_{salt}"
+        return base64.b64encode(password_with_salt.encode('utf-8')).decode('utf-8')
+
+    def _decode_hospital_password(self, encoded_password):
+        """Decodifica a senha do Hospitalar armazenada"""
+        if not encoded_password:
+            return ""
+        try:
+            decoded = base64.b64decode(encoded_password.encode('utf-8')).decode('utf-8')
+            hospital_user = self.hospital_user.get().strip()
+            salt = f"{hospital_user}_hospital_salt"
+            if decoded.endswith(f"_{salt}"):
+                return decoded[:-len(f"_{salt}")]
+            return decoded
+        except:
+            return ""
+
     def clear_logs(self):
         self.log_text.delete(1.0, tk.END)
 
@@ -553,6 +629,11 @@ class MainWindow:
                 config.pop('last_unimed_username', None)
                 config.pop('last_unimed_password', None)
                 config['save_unimed_credentials'] = False
+
+                # Limpar credenciais do Hospitalar
+                config.pop('last_hospital_username', None)
+                config.pop('last_hospital_password', None)
+                config['save_hospital_credentials'] = False
                 
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump(config, f, indent=2)
@@ -600,6 +681,18 @@ Os módulos serão implementados gradualmente.
                         decoded_unimed_password = self._decode_unimed_password(last_unimed_password_encoded)
                         self.unimed_password.set(decoded_unimed_password)
                     self.save_unimed_credentials.set(save_unimed_credentials)
+
+                    # Carregar credenciais do Hospitalar
+                    last_hospital_user = config.get('last_hospital_username', '')
+                    last_hospital_password_encoded = config.get('last_hospital_password', '')
+                    save_hospital_credentials = config.get('save_hospital_credentials', False)
+
+                    if last_hospital_user:
+                        self.hospital_user.set(last_hospital_user)
+                    if last_hospital_password_encoded and save_hospital_credentials:
+                        decoded_hospital_password = self._decode_hospital_password(last_hospital_password_encoded)
+                        self.hospital_password.set(decoded_hospital_password)
+                    self.save_hospital_credentials.set(save_hospital_credentials)
         except Exception as e:
             self.log(f"Erro ao carregar credenciais salvas: {e}", "ERROR")
 
@@ -634,6 +727,19 @@ Os módulos serão implementados gradualmente.
             else:
                 # Remove senha da Unimed salva se usuário desabilitou a opção
                 config.pop('last_unimed_password', None)
+
+            # Salvar credenciais do Hospitalar
+            hospital_user = self.hospital_user.get().strip()
+            if hospital_user:
+                config['last_hospital_username'] = hospital_user
+
+            config['save_hospital_credentials'] = self.save_hospital_credentials.get()
+            if self.save_hospital_credentials.get():
+                hospital_pass = self.hospital_password.get().strip()
+                if hospital_pass:
+                    config['last_hospital_password'] = self._encode_hospital_password(hospital_pass)
+            else:
+                config.pop('last_hospital_password', None)
             
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -651,6 +757,12 @@ Os módulos serão implementados gradualmente.
             self.log("Credenciais Unimed serão salvas localmente", "INFO")
         else:
             self.log("Credenciais Unimed não serão salvas localmente", "INFO")
+
+    def on_save_hospital_credentials_changed(self):
+        if self.save_hospital_credentials.get():
+            self.log("Credenciais Hospitalar serão salvas localmente", "INFO")
+        else:
+            self.log("Credenciais Hospitalar não serão salvas localmente", "INFO")
 
     def on_closing(self):
         if self.username.get().strip():

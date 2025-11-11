@@ -94,7 +94,7 @@
   },
   {
     "id": "guia_unimed",
-    "name": "Guia Unimed",
+    "name": "Guia Unimed e Hospitalar",
     "description": "Automatiza o processo de guias da Unimed",
     "module_path": "modules.guias.guia_unimed",
     "requires_excel": true,
@@ -111,6 +111,17 @@
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
     "requires_unimed_credentials": true
+  },
+  {
+    "id": "lancamento_guia_hospitalar",
+    "name": "Lançamento Guia Hospitalar",
+    "description": "Realiza o lançamento de procedimentos no portal Hospitalar",
+    "module_path": "modules.guias.lacamento_guia_hospitalar",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false,
+    "requires_hospital_credentials": true
   },
   {
     "id": "fatura_mensal",
