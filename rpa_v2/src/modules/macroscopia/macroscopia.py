@@ -167,6 +167,7 @@ class MacroscopiaModule(BaseModule):
             botao_enviar = self.aguardar_elemento_clicavel(wait, By.ID, "btn-enviar-proxima-etapa")
             self.clicar_elemento(driver, botao_enviar)
             log_message("➡️ Clicou em Enviar para próxima etapa", "INFO")
+            time.sleep(MEDIUM_DELAY)
         except Exception as e:
             log_message(f"Erro ao enviar para próxima etapa: {e}", "ERROR")
             raise
