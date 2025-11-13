@@ -54,6 +54,16 @@
     "has_pular_para_laudos": true
   },
   {
+    "id": "liberacao_george",
+    "name": "Liberação de Exame - George",
+    "description": "",
+    "module_path": "modules.liberacao_george",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
+  },
+  {
     "id": "macroscopia",
     "name": "Macroscopia - Papacon/Papaliq",
     "description": "",
