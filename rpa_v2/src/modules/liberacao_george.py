@@ -60,12 +60,12 @@ class LiberacaoGeorgeModule(BaseModule):
             log_message("📋 Modal de assinatura aberto", "INFO")
 
             # Encontrar e clicar no checkbox do Dr. George (value="2173")
-            checkbox_george = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox' and @value='2173']"))
-            )
-            checkbox_george.click()
-            log_message("✅ Checkbox do Dr. George marcado", "INFO")
-            time.sleep(1)
+            # checkbox_george = wait.until(
+            #     EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox' and @value='2173']"))
+            # )
+            # checkbox_george.click()
+            # log_message("✅ Checkbox do Dr. George marcado", "INFO")
+            # time.sleep(1)
 
             # Aguardar o campo de senha aparecer e digitar a senha
             campo_senha = wait.until(
@@ -110,7 +110,7 @@ class LiberacaoGeorgeModule(BaseModule):
                         mensagem_detectada = True
 
                         # Aguardar a mensagem desaparecer (data-time="3" = 3 segundos)
-                        time.sleep(3.5)
+                        time.sleep(0.5)
                         log_message(f"✅ Conclusão salva com sucesso pelo usuário", "SUCCESS")
                         return True
 
