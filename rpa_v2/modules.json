@@ -165,5 +165,15 @@
     "requires_unimed_credentials": false,
     "has_data_tipo": true,
     "has_cobrar_de": true
+  },
+  {
+    "id": "unimed_hospitais",
+    "name": "Unimed - Hospitais",
+    "description": "Lê planilha Excel com número do exame (coluna B) e número da guia (coluna E), preenche a guia no exame e marca como Pendente",
+    "module_path": "modules.guias.unimed_hospitais",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   }
 ]

@@ -1,6 +1,7 @@
 import os
 import time
 import pandas as pd
+import requests
 from tkinter import messagebox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -10,6 +11,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 from datetime import datetime
 import re
+
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
+from requests.utils import add_dict_to_cookiejar
 
 from src.core.browser_factory import BrowserFactory
 from src.core.logger import log_message
@@ -232,6 +236,175 @@ class FaturaMensalModule(BaseModule):
             log_message(f"Erro ao selecionar opção Select2 '{text_to_find}' no campo '{field_id}': {e}", "WARNING")
             return False
 
+    def wait_for_download(self, download_dir: str, previous_files: set, timeout: int = 45) -> str:
+        """Aguarda a criação de um novo arquivo PDF no diretório de downloads"""
+        try:
+            if not os.path.isdir(download_dir):
+                return ""
+
+            end_time = time.time() + timeout
+            while time.time() < end_time:
+                current_files = set(os.listdir(download_dir))
+                new_files = [
+                    f for f in current_files - previous_files
+                    if f.lower().endswith(".pdf")
+                ]
+
+                if new_files:
+                    newest_file = max(
+                        new_files,
+                        key=lambda f: os.path.getmtime(os.path.join(download_dir, f))
+                    )
+                    file_path = os.path.join(download_dir, newest_file)
+                    if os.path.exists(file_path):
+                        return file_path
+
+                time.sleep(1)
+        except Exception as e:
+            log_message(f"⚠️ Erro ao monitorar downloads: {e}", "WARNING")
+
+        return ""
+
+    def get_pdf_url(self, driver, base_url: str) -> str:
+        """Obtém a URL absoluta do PDF a partir da aba atual"""
+        try:
+            current_url = driver.current_url or ""
+            if current_url and current_url != "about:blank":
+                if "renderReport" in current_url:
+                    return current_url
+
+            log_message("⚠️ URL da aba PDF é 'about:blank'. Tentando recuperar link do PDF no DOM...", "WARNING")
+            wait = WebDriverWait(driver, 15)
+
+            # Aguardar página carregar completamente
+            time.sleep(2)
+            
+            # Tentar localizar o link <a> que contém o botão "Abrir" - método mais confiável
+            try:
+                # Primeiro tentar encontrar o link que contém o botão com ID "open-button"
+                link_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='renderReport']")))
+                href = link_element.get_attribute("href")
+                if href:
+                    pdf_url = urljoin(base_url, href) if not href.startswith("http") else href
+                    log_message(f"✅ URL obtida via link <a>: {pdf_url}", "SUCCESS")
+                    return pdf_url
+            except Exception as e_link1:
+                log_message(f"ℹ️ Link <a> com renderReport não encontrado (tentativa 1): {e_link1}", "INFO")
+            
+            # Tentar encontrar qualquer link que contenha renderReport
+            try:
+                links = driver.find_elements(By.TAG_NAME, "a")
+                for link in links:
+                    href = link.get_attribute("href")
+                    if href and "renderReport" in href:
+                        pdf_url = urljoin(base_url, href) if not href.startswith("http") else href
+                        log_message(f"✅ URL obtida via busca em links: {pdf_url}", "SUCCESS")
+                        return pdf_url
+            except Exception as e_link2:
+                log_message(f"ℹ️ Busca em links falhou: {e_link2}", "INFO")
+
+            # Tentar localizar elemento <embed>
+            try:
+                embed_element = wait.until(EC.presence_of_element_located((By.TAG_NAME, "embed")))
+                embed_src = embed_element.get_attribute("src") or embed_element.get_attribute("data")
+
+                if embed_src:
+                    pdf_url = urljoin(base_url, embed_src)
+                    log_message(f"✅ URL obtida via <embed>: {pdf_url}", "SUCCESS")
+                    return pdf_url
+            except Exception as e_embed:
+                log_message(f"ℹ️ Elemento <embed> não disponível ou sem src válido: {e_embed}", "INFO")
+
+            return ""
+        except Exception as e:
+            log_message(f"⚠️ Não foi possível obter URL do PDF: {e}", "WARNING")
+            return ""
+
+    def prepare_window_open_capture(self, driver):
+        """Sobrescreve window.open para capturar o link do relatório"""
+        try:
+            driver.execute_script("""
+                try {
+                    if (!window.__rpa_open_patched) {
+                        window.__rpa_real_open = window.open;
+                        window.open = function(url, name, specs) {
+                            window.__rpa_last_open_url = url;
+                            if (window.__rpa_real_open) {
+                                return window.__rpa_real_open.call(this, url, name, specs);
+                            }
+                            return null;
+                        };
+                        window.__rpa_open_patched = true;
+                    }
+                    window.__rpa_last_open_url = null;
+                } catch (e) {
+                    window.__rpa_last_open_url = null;
+                }
+            """)
+        except Exception as e:
+            log_message(f"⚠️ Não foi possível preparar captura do window.open: {e}", "WARNING")
+
+    def get_captured_window_open_url(self, driver, base_url: str) -> str:
+        """Retorna o último link registrado pelo window.open sobrescrito"""
+        try:
+            captured_url = driver.execute_script("return window.__rpa_last_open_url || null;")
+            if captured_url:
+                absolute_url = urljoin(base_url, captured_url)
+                log_message(f"✅ URL obtida via captura do window.open: {absolute_url}", "SUCCESS")
+                return absolute_url
+        except Exception as e:
+            log_message(f"⚠️ Não foi possível recuperar URL capturada do window.open: {e}", "WARNING")
+        return ""
+
+    def download_pdf(self, driver, pdf_url: str, base_url: str, download_dir: str) -> str:
+        """Realiza o download do PDF utilizando os cookies da sessão atual"""
+        try:
+            if not pdf_url:
+                log_message("⚠️ URL do PDF vazia - download não realizado.", "WARNING")
+                return ""
+
+            parsed_url = urlparse(pdf_url)
+            if not parsed_url.scheme:
+                pdf_url = urljoin(base_url, pdf_url)
+                parsed_url = urlparse(pdf_url)
+
+            session = requests.Session()
+            add_dict_to_cookiejar(session.cookies, {cookie['name']: cookie['value'] for cookie in driver.get_cookies()})
+
+            log_message(f"📥 Baixando PDF diretamente da URL: {pdf_url}", "INFO")
+            response = session.get(pdf_url, stream=True, timeout=60)
+            response.raise_for_status()
+
+            query_params = parse_qs(parsed_url.query)
+            file_name = "relatorio.pdf"
+
+            if "path" in query_params and query_params["path"]:
+                raw_path = query_params["path"][0]
+                decoded_path = unquote(raw_path)
+                candidate_name = os.path.basename(decoded_path)
+                if candidate_name:
+                    file_name = candidate_name
+
+            base_name, ext = os.path.splitext(file_name)
+            if ext.lower() != ".pdf":
+                file_name = f"{base_name}.pdf"
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = os.path.join(download_dir, file_name)
+            if os.path.exists(file_path):
+                file_path = os.path.join(download_dir, f"{base_name}_{timestamp}.pdf")
+
+            with open(file_path, "wb") as pdf_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        pdf_file.write(chunk)
+
+            log_message(f"✅ PDF baixado com sucesso em: {file_path}", "SUCCESS")
+            return file_path
+        except Exception as e:
+            log_message(f"⚠️ Erro ao baixar PDF via HTTP: {e}", "WARNING")
+            return ""
+
     def run(self, params: dict):
         username = params.get("username")
         password = params.get("password")
@@ -248,6 +421,8 @@ class FaturaMensalModule(BaseModule):
         log_message(f"📁 Pasta de downloads: {download_dir}", "INFO")
         
         url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        parsed_url = urlparse(url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}" if parsed_url.scheme and parsed_url.netloc else "https://pathoweb.com.br"
         driver = BrowserFactory.create_chrome(download_dir=download_dir, headless=headless_mode)
         wait = WebDriverWait(driver, 15)
 
@@ -543,6 +718,9 @@ class FaturaMensalModule(BaseModule):
                         
                         # SEGUNDO: Clicar no botão "Relatório"
                         try:
+                            self.prepare_window_open_capture(driver)
+                            existing_downloads = set(os.listdir(download_dir)) if os.path.isdir(download_dir) else set()
+
                             # Tentar clicar com JavaScript se o clique normal falhar
                             try:
                                 relatorio_btn = wait.until(EC.element_to_be_clickable((By.ID, "relatorioFaturamento")))
@@ -574,6 +752,10 @@ class FaturaMensalModule(BaseModule):
                             all_windows = driver.window_handles
                             log_message(f"🔍 Total de abas abertas: {len(all_windows)}", "INFO")
                             
+                            pdf_current_url = ""
+                            same_window_navigation = False
+                            downloaded_file = ""
+
                             if len(all_windows) > 1:
                                 # Trocar para a nova aba (PDF)
                                 for window in all_windows:
@@ -582,57 +764,61 @@ class FaturaMensalModule(BaseModule):
                                         log_message(f"✅ Trocado para nova aba com PDF", "SUCCESS")
                                         break
                                 
-                                # Aguardar PDF carregar
-                                time.sleep(2)
-                                log_message(f"📄 URL da aba PDF: {driver.current_url}", "INFO")
+                                # Aguardar página carregar completamente
+                                time.sleep(3)
                                 
-                                # Procurar e clicar no botão "Abrir" (ID: open-button)
-                                try:
-                                    log_message("🔍 Procurando botão 'Abrir' com ID 'open-button'...", "INFO")
-                                    
-                                    # Tentar encontrar o botão por ID primeiro
+                                # Tentar obter URL do PDF do DOM
+                                pdf_current_url = self.get_pdf_url(driver, base_url)
+                                
+                                if pdf_current_url:
+                                    log_message(f"📄 URL do PDF identificada: {pdf_current_url}", "SUCCESS")
+                                    # Baixar PDF diretamente usando a URL
+                                    downloaded_file = self.download_pdf(driver, pdf_current_url, base_url, download_dir)
+                                    if downloaded_file:
+                                        log_message(f"✅ PDF baixado diretamente: {downloaded_file}", "SUCCESS")
+                                else:
+                                    log_message("⚠️ Não foi possível obter URL do PDF. Tentando clicar no botão 'Abrir'...", "WARNING")
+                                    # Fallback: tentar clicar no botão "Abrir"
                                     try:
-                                        abrir_btn = WebDriverWait(driver, 10).until(
-                                            EC.element_to_be_clickable((By.ID, "open-button"))
-                                        )
-                                        abrir_btn.click()
-                                        log_message("✅ Botão 'Abrir' (ID: open-button) clicado", "SUCCESS")
-                                        time.sleep(3)  # Aguardar download iniciar
-                                    except Exception as e1:
-                                        log_message(f"⚠️ Erro ao clicar por ID: {e1}", "WARNING")
-                                        # Tentar por XPath com texto
+                                        log_message("🔍 Procurando botão 'Abrir' com ID 'open-button'...", "INFO")
+                                        
+                                        # Tentar encontrar o botão por ID primeiro
                                         try:
-                                            abrir_btn = WebDriverWait(driver, 5).until(
-                                                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Abrir')]"))
+                                            abrir_btn = WebDriverWait(driver, 10).until(
+                                                EC.element_to_be_clickable((By.ID, "open-button"))
                                             )
                                             abrir_btn.click()
-                                            log_message("✅ Botão 'Abrir' clicado via XPath", "SUCCESS")
-                                            time.sleep(3)
-                                        except Exception as e2:
-                                            log_message(f"⚠️ Erro ao clicar via XPath: {e2}", "WARNING")
-                                            # Tentar JavaScript como último recurso
+                                            log_message("✅ Botão 'Abrir' (ID: open-button) clicado", "SUCCESS")
+                                            time.sleep(3)  # Aguardar download iniciar
+                                        except Exception as e1:
+                                            log_message(f"⚠️ Erro ao clicar por ID: {e1}", "WARNING")
+                                            # Tentar por XPath com texto
                                             try:
-                                                driver.execute_script("document.getElementById('open-button').click();")
-                                                log_message("✅ Botão 'Abrir' clicado via JavaScript", "SUCCESS")
+                                                abrir_btn = WebDriverWait(driver, 5).until(
+                                                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Abrir')]"))
+                                                )
+                                                abrir_btn.click()
+                                                log_message("✅ Botão 'Abrir' clicado via XPath", "SUCCESS")
                                                 time.sleep(3)
-                                            except Exception as e3:
-                                                log_message(f"⚠️ Erro ao clicar via JavaScript: {e3}", "WARNING")
-                                                # Último fallback: Ctrl+S
+                                            except Exception as e2:
+                                                log_message(f"⚠️ Erro ao clicar via XPath: {e2}", "WARNING")
+                                                # Tentar JavaScript como último recurso
                                                 try:
-                                                    log_message("📥 Tentando salvar PDF com Ctrl+S...", "INFO")
-                                                    ActionChains(driver).key_down(Keys.CONTROL).send_keys('s').key_up(Keys.CONTROL).perform()
-                                                    time.sleep(2)
-                                                    ActionChains(driver).send_keys(Keys.ENTER).perform()
-                                                    time.sleep(2)
-                                                    log_message("✅ PDF salvo via Ctrl+S", "SUCCESS")
-                                                except Exception as e_save:
-                                                    log_message(f"⚠️ Erro ao salvar PDF: {e_save}", "WARNING")
-                                except Exception as e_btn:
-                                    log_message(f"⚠️ Erro geral ao processar botão 'Abrir': {e_btn}", "WARNING")
+                                                    driver.execute_script("document.getElementById('open-button').click();")
+                                                    log_message("✅ Botão 'Abrir' clicado via JavaScript", "SUCCESS")
+                                                    time.sleep(3)
+                                                except Exception as e3:
+                                                    log_message(f"⚠️ Erro ao clicar via JavaScript: {e3}", "WARNING")
+                                    except Exception as e_btn:
+                                        log_message(f"⚠️ Erro geral ao processar botão 'Abrir': {e_btn}", "WARNING")
                                 
                                 # Aguardar download completar
                                 log_message("📥 Aguardando download completar...", "INFO")
                                 time.sleep(5)
+                                
+                                # Se ainda não baixou, tentar verificar se foi baixado pelo clique no botão
+                                if not downloaded_file:
+                                    downloaded_file = self.wait_for_download(download_dir, existing_downloads)
                                 
                                 # Fechar a aba do PDF
                                 try:
@@ -647,6 +833,39 @@ class FaturaMensalModule(BaseModule):
                                 time.sleep(1)
                             else:
                                 log_message("⚠️ Nova aba não detectada, continuando...", "WARNING")
+                                pdf_current_url = self.get_pdf_url(driver, base_url)
+                                if pdf_current_url:
+                                    same_window_navigation = True
+                                    downloaded_file = self.download_pdf(driver, pdf_current_url, base_url, download_dir)
+                                else:
+                                    pdf_current_url = self.get_captured_window_open_url(driver, base_url)
+                                    if pdf_current_url:
+                                        downloaded_file = self.download_pdf(driver, pdf_current_url, base_url, download_dir)
+
+                            # Se ainda não baixou, tentar mais uma vez com URL capturada
+                            if not downloaded_file and not pdf_current_url:
+                                pdf_current_url = self.get_captured_window_open_url(driver, base_url)
+                                if pdf_current_url:
+                                    downloaded_file = self.download_pdf(driver, pdf_current_url, base_url, download_dir)
+
+                            # Último fallback: verificar se arquivo foi baixado
+                            if not downloaded_file:
+                                downloaded_file = self.wait_for_download(download_dir, existing_downloads)
+
+                            if downloaded_file:
+                                log_message(f"✅ PDF salvo em: {downloaded_file}", "SUCCESS")
+                            else:
+                                log_message("⚠️ Nenhum novo PDF detectado após a tentativa de download.", "WARNING")
+
+                            if same_window_navigation:
+                                try:
+                                    log_message("🔄 Retornando para tela anterior após navegação na mesma aba...", "INFO")
+                                    driver.back()
+                                    wait.until(EC.presence_of_element_located((By.ID, "pesquisaFaturamento")))
+                                    log_message("✅ Retorno para tela de Pré Faturamento concluído", "SUCCESS")
+                                    time.sleep(2)
+                                except Exception as back_error:
+                                    log_message(f"⚠️ Erro ao retornar para tela anterior: {back_error}", "WARNING")
                             
                             # TERCEIRO: Clicar no botão "Situação faturamento para"
                             try:
