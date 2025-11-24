@@ -36,22 +36,32 @@ class MacroscopiaModule(BaseModule):
 
     def clicar_elemento(self, driver, elem):
         """Rola até o elemento e clica nele."""
+        log_message("🔹 Rolando até o elemento...", "INFO")
         driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", elem)
         time.sleep(SHORT_DELAY)
+
+        log_message("🔹 Executando clique...", "INFO")
         elem.click()
         time.sleep(SHORT_DELAY)
+        log_message("✅ Clique executado com sucesso", "SUCCESS")
 
     def preencher_campo(self, campo, valor):
         """Limpa e preenche um campo de input."""
+        log_message(f"🔹 Limpando campo...", "INFO")
         campo.clear()
         time.sleep(SHORT_DELAY)
+
+        log_message(f"🔹 Digitando valor: '{valor}'", "INFO")
         campo.send_keys(valor)
         time.sleep(SHORT_DELAY)
+        log_message("✅ Campo preenchido com sucesso", "SUCCESS")
 
     def pressionar_enter(self, campo):
         """Pressiona Enter em um campo."""
+        log_message("🔹 Enviando tecla ENTER...", "INFO")
         campo.send_keys(Keys.ENTER)
         time.sleep(SHORT_DELAY)
+        log_message("✅ ENTER enviado com sucesso", "SUCCESS")
 
     # --- Normalização e busca robusta em selects ---
     def normalizar_nome(self, nome):
@@ -109,42 +119,83 @@ class MacroscopiaModule(BaseModule):
     def processar_exame(self, driver, wait, codigo, mascara, citotecnica_nome):
         """Processa um exame individual: digita o código, executa rotina de macroscopia."""
         try:
-            log_message("Aguardando página carregar...", "INFO")
+            log_message(f"🔵 Iniciando processamento do código: {codigo}", "INFO")
+            log_message("🔵  Aguardando página carregar...", "INFO")
             time.sleep(SHORT_DELAY)
+
+            log_message("🔵 Buscando campo de código (inputSearchCodBarra)...", "INFO")
             campo_codigo = self.aguardar_elemento(wait, By.ID, "inputSearchCodBarra")
-            log_message("✅ Campo de código encontrado", "INFO")
+            log_message("✅  Campo de código encontrado", "SUCCESS")
+
+            log_message(f"🔵 Preenchendo campo com código: {codigo}", "INFO")
             self.preencher_campo(campo_codigo, codigo)
+            log_message("✅ Campo preenchido com sucesso", "SUCCESS")
+
+            log_message("🔵 Pressionando ENTER no campo...", "INFO")
             self.pressionar_enter(campo_codigo)
-            return self.aguardar_e_processar_andamento(driver, wait, codigo, mascara, citotecnica_nome)
+            log_message("✅ ENTER pressionado", "SUCCESS")
+
+            log_message("🔵 Chamando aguardar_e_processar_andamento...", "INFO")
+            resultado = self.aguardar_e_processar_andamento(driver, wait, codigo, mascara, citotecnica_nome)
+            log_message(f"✅ Processamento concluído. Status: {resultado['status']}", "SUCCESS")
+
+            return resultado
+
         except Exception as e:
-            log_message(f"Erro ao processar exame {codigo}: {e}", "ERROR")
+            log_message(f"❌ Erro ao processar exame {codigo}: {e}", "ERROR")
+            log_message(f"❌ Tipo do erro: {type(e).__name__}", "ERROR")
+            import traceback
+            log_message(f"❌ Stack trace: {traceback.format_exc()}", "ERROR")
             return {'status': 'erro', 'detalhes': str(e)}
 
     def digitar_mascara_e_buscar(self, driver, wait, mascara):
         try:
+            log_message(f"🟡 Iniciando busca da máscara: '{mascara}'", "INFO")
+
+            log_message("🟡 Aguardando campo 'buscaArvore' estar clicável...", "INFO")
             campo_busca = self.aguardar_elemento_clicavel(wait, By.ID, "buscaArvore")
+            log_message("✅ Campo 'buscaArvore' localizado", "SUCCESS")
+
             if not campo_busca.is_displayed():
-                log_message("⚠️ Campo buscaArvore não está visível", "WARNING")
+                log_message("⚠️ Campo 'buscaArvore' não está visível!", "WARNING")
                 return
+
+            log_message(f"🟡 Preenchendo campo com máscara: '{mascara}'", "INFO")
             self.preencher_campo(campo_busca, mascara)
+            log_message("✅ Campo preenchido com sucesso", "SUCCESS")
+
+            log_message("🟡 Pressionando ENTER...", "INFO")
             self.pressionar_enter(campo_busca)
+            log_message("✅ ENTER pressionado com sucesso", "SUCCESS")
+
         except Exception as e:
-            log_message(f"Erro ao digitar máscara: {e}", "ERROR")
+            log_message(f"❌ Erro ao digitar máscara: {e}", "ERROR")
+            log_message(f"❌ Tipo do erro: {type(e).__name__}", "ERROR")
             raise
 
     def salvar_macroscopia(self, driver, wait):
         try:
+            log_message("🟠 Iniciando processo de salvamento...", "INFO")
+
+            log_message("🟠 Buscando botões com onclick='ajaxChangeSave'...", "INFO")
             botoes_onclick = driver.find_elements(By.XPATH, "//a[contains(@onclick, 'ajaxChangeSave')]")
+
             if botoes_onclick:
+                log_message(f"✅ Encontrados {len(botoes_onclick)} botão(ões)", "SUCCESS")
+                log_message("🟠 Clicando no primeiro botão...", "INFO")
                 self.clicar_elemento(driver, botoes_onclick[0])
-                log_message("💾 Clicou em Salvar usando onclick", "INFO")
+                log_message("✅ Clique no botão Salvar executado com sucesso", "SUCCESS")
             else:
-                log_message("❌ Botão Salvar não encontrado.", "ERROR")
+                log_message("❌ Nenhum botão Salvar encontrado na página!", "ERROR")
                 raise Exception("Botão Salvar não encontrado")
 
+            log_message(f"🟠 Aguardando {SHORT_DELAY}s após salvar...", "INFO")
             time.sleep(SHORT_DELAY)
+            log_message("✅ Salvamento concluído com sucesso", "SUCCESS")
+
         except Exception as e:
-            log_message(f"Erro ao salvar: {e}", "ERROR")
+            log_message(f"❌ Erro ao salvar: {e}", "ERROR")
+            log_message(f"❌ Tipo do erro: {type(e).__name__}", "ERROR")
             raise
 
     def selecionar_painel_papanicolau(self, driver, wait):
@@ -164,12 +215,23 @@ class MacroscopiaModule(BaseModule):
 
     def enviar_proxima_etapa(self, driver, wait):
         try:
+            log_message("🟣 Iniciando envio para próxima etapa...", "INFO")
+
+            log_message("🟣 Aguardando botão 'btn-enviar-proxima-etapa' estar clicável...", "INFO")
             botao_enviar = self.aguardar_elemento_clicavel(wait, By.ID, "btn-enviar-proxima-etapa")
+            log_message("✅ Botão localizado", "SUCCESS")
+
+            log_message("🟣 Clicando no botão...", "INFO")
             self.clicar_elemento(driver, botao_enviar)
-            log_message("➡️ Clicou em Enviar para próxima etapa", "INFO")
+            log_message("✅ Clique executado com sucesso", "SUCCESS")
+
+            log_message(f"🟣 Aguardando {MEDIUM_DELAY}s após envio...", "INFO")
             time.sleep(MEDIUM_DELAY)
+            log_message("✅ Envio para próxima etapa concluído", "SUCCESS")
+
         except Exception as e:
-            log_message(f"Erro ao enviar para próxima etapa: {e}", "ERROR")
+            log_message(f"❌ Erro ao enviar para próxima etapa: {e}", "ERROR")
+            log_message(f"❌ Tipo do erro: {type(e).__name__}", "ERROR")
             raise
 
     def preencher_campo_codigo_novamente(self, driver, wait, codigo):
@@ -220,28 +282,72 @@ class MacroscopiaModule(BaseModule):
             raise
 
     def aguardar_e_processar_andamento(self, driver, wait, codigo, mascara, citotecnica_nome):
-        log_message("Aguardando div de andamento do exame aparecer...", "INFO")
+        log_message("🟢 Iniciando aguardo da div de andamento...", "INFO")
+        log_message(f"🟢 Timeout configurado: {DEFAULT_TIMEOUT}s", "INFO")
+
         inicio = time.time()
+        tentativas = 0
+
         while time.time() - inicio < DEFAULT_TIMEOUT:
+            tentativas += 1
             try:
+                log_message(f"🟢 Tentativa {tentativas} - buscando divAndamentoExame...", "INFO")
                 andamento_div = driver.find_element(By.ID, "divAndamentoExame")
+
                 if andamento_div and andamento_div.is_displayed():
-                    log_message("📋 Div de andamento do exame encontrada!", "SUCCESS")
+                    tempo_decorrido = time.time() - inicio
+                    log_message(f"✅ Div de andamento encontrada após {tempo_decorrido:.2f}s!",
+                                "SUCCESS")
                     break
-            except:
-                pass
+                else:
+                    log_message(f"⚠️ Div encontrada mas não está visível (tentativa {tentativas})",
+                                "WARNING")
+
+            except Exception as e:
+                log_message(
+                    f"🟢 Div ainda não encontrada (tentativa {tentativas}): {type(e).__name__}",
+                    "INFO")
+
             time.sleep(1)
         else:
-            log_message("⚠️ Div de andamento não apareceu no tempo esperado", "WARNING")
+            log_message(f"❌ Timeout de {DEFAULT_TIMEOUT}s atingido após {tentativas} tentativas",
+                        "ERROR")
             return {'status': 'sem_andamento', 'detalhes': 'Exame não encontrado ou não carregou'}
+
         time.sleep(SHORT_DELAY)
+
         if mascara:
-            self.digitar_mascara_e_buscar(driver, wait, mascara)
-            self.salvar_macroscopia(driver, wait)
-            #self.selecionar_painel_papanicolau(driver, wait)
-            self.enviar_proxima_etapa(driver, wait)
+            log_message(f"🟢 Máscara encontrada: '{mascara}' - Iniciando fluxo de processamento",
+                        "INFO")
+
+            try:
+                log_message("🟢 Chamando digitar_mascara_e_buscar...", "INFO")
+                self.digitar_mascara_e_buscar(driver, wait, mascara)
+                log_message("✅ digitar_mascara_e_buscar concluído", "SUCCESS")
+            except Exception as e:
+                log_message(f"❌ Erro em digitar_mascara_e_buscar: {e}", "ERROR")
+                raise
+
+            try:
+                log_message("🟢 Chamando salvar_macroscopia...", "INFO")
+                self.salvar_macroscopia(driver, wait)
+                log_message("✅ salvar_macroscopia concluído", "SUCCESS")
+            except Exception as e:
+                log_message(f"❌ Erro em salvar_macroscopia: {e}", "ERROR")
+                raise
+
+            try:
+                log_message("🟢 Chamando enviar_proxima_etapa...", "INFO")
+                self.enviar_proxima_etapa(driver, wait)
+                log_message("✅ enviar_proxima_etapa concluído", "SUCCESS")
+            except Exception as e:
+                log_message(f"❌ Erro em enviar_proxima_etapa: {e}", "ERROR")
+                raise
+
         else:
             log_message("⚠️ Nenhuma máscara encontrada, pulando busca", "WARNING")
+
+        log_message("✅  Processamento do andamento concluído com sucesso", "SUCCESS")
         return {'status': 'sucesso'}
 
     def fechar_exame(self, driver, wait):
