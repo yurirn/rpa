@@ -2,6 +2,7 @@ import os
 import time
 import zipfile
 import traceback
+from datetime import datetime
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -53,10 +54,14 @@ class UnimedUploader(BaseModule):
         self.driver.get(url_pos_login)
 
     def selecionar_versao_upload(self):
-        log_message("Selecionando versão 4.01.00 para upload...", "INFO")
+        data_atual = datetime.now()
+        data_corte = datetime(2024, 11, 30)
+        versao = "4.02.00" if data_atual >= data_corte else "4.01.00"
+
+        log_message(f"Selecionando versão {versao} para upload...", "INFO")
         select_element = self.wait.until(EC.presence_of_element_located((By.ID, "versao")))
         select_obj = Select(select_element)
-        select_obj.select_by_value("4.01.00")
+        select_obj.select_by_value(versao)
 
     def selecionar_arquivo_upload(self, caminho_arquivo):
         log_message(f"Selecionando arquivo para upload: {caminho_arquivo}", "INFO")
