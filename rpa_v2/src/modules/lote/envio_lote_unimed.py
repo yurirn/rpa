@@ -113,7 +113,7 @@ class XMLGeneratorAutomation(BaseModule):
 
     def fazer_login(self):
         log_message("Fazendo login no Pathoweb...", "INFO")
-        self.driver.get("https://pathoweb.com.br/login/auth")
+        self.driver.get("https://dap.pathoweb.com.br/login/auth")
         campo_usuario = self.wait.until(EC.presence_of_element_located((By.ID, "username")))
         campo_usuario.send_keys(self.username)
         campo_senha = self.driver.find_element(By.ID, "password")
@@ -496,7 +496,7 @@ class XMLGeneratorAutomation(BaseModule):
             # Verificar se está no módulo de faturamento
             if "moduloFaturamento" not in current_url:
                 log_message("⚠️ Não está no módulo de faturamento. Navegando...", "WARNING")
-                self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                self.driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(3)
             else:
                 log_message("✅ Já está no módulo de faturamento", "SUCCESS")
@@ -533,7 +533,7 @@ class XMLGeneratorAutomation(BaseModule):
                 except Exception as e:
                     log_message(f"⚠️ Não foi possível clicar no link: {e}", "WARNING")
                     log_message("Tentando navegação direta como fallback...", "INFO")
-                    self.driver.get("https://pathoweb.com.br/moduloFaturamento/faturamento")
+                    self.driver.get("https://dap.pathoweb.com.br/moduloFaturamento/faturamento")
                     time.sleep(2)
                 
                 # Verificar se a página carregou corretamente
@@ -587,7 +587,7 @@ class XMLGeneratorAutomation(BaseModule):
             log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
             current_url = self.driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
                     modulo_link = self.wait.until(
@@ -598,7 +598,7 @@ class XMLGeneratorAutomation(BaseModule):
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
                     # Tentar navegar diretamente pela URL como fallback
-                    self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    self.driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -607,7 +607,7 @@ class XMLGeneratorAutomation(BaseModule):
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
                 # Tentar navegar diretamente como fallback
-                self.driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                self.driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 

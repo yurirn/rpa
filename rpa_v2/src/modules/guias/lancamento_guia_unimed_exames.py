@@ -1321,7 +1321,7 @@ class LancamentoGuiaUnimedExamesModule(BaseModule):
             #                             f"🔄 Retornando para página de busca para próximo exame ({i + 1}/{len(guias_para_abrir)})...",
             #                             "INFO")
             #                         try:
-            #                             driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            #                             driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
             #                             time.sleep(2)
             #
             #                             # Clicar em "Preparar exames para fatura" novamente

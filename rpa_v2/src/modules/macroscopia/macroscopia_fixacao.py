@@ -270,7 +270,7 @@ class MacroscopiaFixacaoModule(BaseModule):
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
             return
 
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         driver = None
         resultados = []
         

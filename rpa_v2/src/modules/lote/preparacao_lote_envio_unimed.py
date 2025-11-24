@@ -158,7 +158,7 @@ class PreparacaoLoteModule(BaseModule):
                                    cancel_flag, gera_xml_tiss, headless_mode,
                                    unimed_user, unimed_pass, pasta_download, contexto):
         """Executa o processo completo de automação para uma lista de exames"""
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         driver = BrowserFactory.create_chrome(headless=headless_mode)
         wait = WebDriverWait(driver, 15)
         resultados = []
@@ -173,7 +173,7 @@ class PreparacaoLoteModule(BaseModule):
             log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
             current_url = driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
                     modulo_link = wait.until(
@@ -183,7 +183,7 @@ class PreparacaoLoteModule(BaseModule):
                     log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -191,7 +191,7 @@ class PreparacaoLoteModule(BaseModule):
                 log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 

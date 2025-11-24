@@ -474,7 +474,7 @@ class LancamentoGuiaHospitalarModule(BaseModule):
     def fazer_login_pathoweb(self, driver, wait, username, password):
         try:
             log_message("🔐 Fazendo login no PathoWeb...", "INFO")
-            driver.get("https://pathoweb.com.br/login/auth")
+            driver.get("https://dap.pathoweb.com.br/login/auth")
 
             wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
             driver.find_element(By.ID, "password").send_keys(password)
@@ -483,7 +483,7 @@ class LancamentoGuiaHospitalarModule(BaseModule):
 
             log_message("Verificando módulo de faturamento...", "INFO")
             current_url = driver.current_url
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 try:
                     modulo_link = self.wait_for_element(
                         driver, wait, By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=2']", condition="presence"
@@ -492,11 +492,11 @@ class LancamentoGuiaHospitalarModule(BaseModule):
                     time.sleep(2)
                 except Exception as e:
                     log_message(f"⚠️ Falha ao selecionar módulo: {e} - acessando diretamente", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
             elif "moduloFaturamento" not in current_url:
                 log_message("⚠️ URL inesperada após login - acessando módulo diretamente", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
 
             try:
@@ -507,7 +507,7 @@ class LancamentoGuiaHospitalarModule(BaseModule):
             except Exception:
                 pass
 
-            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
 
             log_message("Clicando em 'Preparar exames para fatura'...", "INFO")
             try:
@@ -1071,7 +1071,7 @@ class LancamentoGuiaHospitalarModule(BaseModule):
 
                             if idx < len(guias_para_pathoweb):
                                 try:
-                                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                                     time.sleep(2)
                                     preparar_btn = self.wait_for_element(
                                         driver, wait, By.CSS_SELECTOR,

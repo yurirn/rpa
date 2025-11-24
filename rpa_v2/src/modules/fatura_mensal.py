@@ -420,9 +420,9 @@ class FaturaMensalModule(BaseModule):
         Path(download_dir).mkdir(parents=True, exist_ok=True)
         log_message(f"📁 Pasta de downloads: {download_dir}", "INFO")
         
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         parsed_url = urlparse(url)
-        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}" if parsed_url.scheme and parsed_url.netloc else "https://pathoweb.com.br"
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}" if parsed_url.scheme and parsed_url.netloc else "https://dap.pathoweb.com.br"
         driver = BrowserFactory.create_chrome(download_dir=download_dir, headless=headless_mode)
         wait = WebDriverWait(driver, 15)
 
@@ -457,7 +457,7 @@ class FaturaMensalModule(BaseModule):
             log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
             current_url = driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
                     modulo_link = wait.until(
@@ -467,7 +467,7 @@ class FaturaMensalModule(BaseModule):
                     log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -475,7 +475,7 @@ class FaturaMensalModule(BaseModule):
                 log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
@@ -491,7 +491,7 @@ class FaturaMensalModule(BaseModule):
 
             # Acessar explicitamente a página do módulo de faturamento
             log_message("Acessando módulo de faturamento via URL...", "INFO")
-            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
 
             # Clicar no botão "Preparar exames para fatura"
             log_message("Clicando em 'Preparar exames para fatura'...", "INFO")

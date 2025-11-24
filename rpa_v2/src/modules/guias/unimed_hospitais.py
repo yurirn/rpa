@@ -109,7 +109,7 @@ class UnimedHospitaisModule(BaseModule):
             log_message("🔐 Fazendo login no PathoWeb...", "INFO")
             
             # URL do PathoWeb
-            url = "https://pathoweb.com.br/login/auth"
+            url = "https://dap.pathoweb.com.br/login/auth"
             driver.get(url)
             
             # Preencher credenciais
@@ -121,7 +121,7 @@ class UnimedHospitaisModule(BaseModule):
             log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
             current_url = driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
                     modulo_link = self.wait_for_element(driver, wait, By.CSS_SELECTOR,
@@ -131,7 +131,7 @@ class UnimedHospitaisModule(BaseModule):
                     log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -139,7 +139,7 @@ class UnimedHospitaisModule(BaseModule):
                 log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
@@ -155,7 +155,7 @@ class UnimedHospitaisModule(BaseModule):
 
             # Acessar explicitamente a página do módulo de faturamento
             log_message("Acessando módulo de faturamento via URL...", "INFO")
-            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
             time.sleep(2)
 
             # Clicar no botão "Preparar exames para fatura"
@@ -495,141 +495,198 @@ class UnimedHospitaisModule(BaseModule):
             return False
 
     def marcar_exame_como_pendente(self, driver, wait):
-        """Marca o exame como 'Pendente' na tabela"""
+        """Marca TODAS as linhas do exame como 'Pendente' na tabela"""
         try:
-            log_message("📝 Marcando exame como 'Pendente'...", "INFO")
+            log_message("📝 Marcando exames como 'Pendente' na tabela...", "INFO")
             time.sleep(2)
 
             # Re-localizar a tabela sempre antes de processar para evitar elementos stale
             def obter_linhas():
                 return driver.find_elements(By.CSS_SELECTOR, "#tabelaPreFaturamentoTbody tr")
             
-            linhas = obter_linhas()
-            if not linhas or len(linhas) == 0:
+            linhas_iniciais = obter_linhas()
+            if not linhas_iniciais:
                 log_message("⚠️ Nenhuma linha encontrada na tabela de pré-faturamento", "WARNING")
                 return False
 
-            # Processar apenas a primeira linha (o exame que acabamos de processar)
-            linha = linhas[0]
+            total_linhas = len(linhas_iniciais)
+            log_message(f"📋 Total de linhas encontradas: {total_linhas}", "INFO")
             
-            try:
-                # Re-localizar células dentro da linha
-                celulas = linha.find_elements(By.CSS_SELECTOR, "td")
-                if len(celulas) < 2:
-                    log_message("⚠️ Células insuficientes na linha", "WARNING")
-                    return False
-
-                # Segunda coluna é a de 'Conferido' (onde vamos mudar para 'Pendente')
-                cel_conferido = celulas[1]
-
-                # Verificar status atual (mas sempre tentar mudar para garantir)
+            # Processar cada linha por índice (re-localizando elementos a cada iteração)
+            linhas_processadas = 0
+            
+            for idx in range(total_linhas):
                 try:
-                    ancora = cel_conferido.find_element(By.CSS_SELECTOR, "a.table-editable-ancora")
-                    texto_ancora = (ancora.text or "").strip().lower()
-                    log_message(f"ℹ️ Status atual do exame: {texto_ancora}", "INFO")
-                    # Não retornar aqui - sempre tentar mudar para Pendente
-                except Exception:
-                    log_message("ℹ️ Âncora não encontrada, tentando processar", "INFO")
+                    log_message(f"🔄 Processando linha {idx + 1}/{total_linhas}...", "INFO")
+                    
+                    # SEMPRE re-localizar elementos para evitar stale elements
+                    # Aguardar spinner desaparecer antes de re-localizar
+                    try:
+                        WebDriverWait(driver, 1).until(EC.presence_of_element_located((By.ID, "spinner")))
+                        log_message(f"⏳ Aguardando spinner desaparecer antes de processar linha {idx + 1}...", "INFO")
+                        WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                    except Exception:
+                        pass
+                    
+                    time.sleep(0.5)  # Pequena pausa para estabilidade
+                    
+                    # Re-localizar todas as linhas
+                    linhas_atuais = obter_linhas()
+                    if idx >= len(linhas_atuais):
+                        log_message(f"⚠️ Linha {idx + 1} não existe mais na tabela (total atual: {len(linhas_atuais)})", "WARNING")
+                        continue
+                    
+                    linha = linhas_atuais[idx]
+                    
+                    # Re-localizar células dentro da linha atual
+                    celulas = linha.find_elements(By.CSS_SELECTOR, "td")
+                    if len(celulas) < 2:
+                        log_message(f"⚠️ Linha {idx + 1}: células insuficientes ({len(celulas)})", "WARNING")
+                        continue
 
-                # Tentar abrir o editor clicando na âncora
-                clicou_ancora = False
-                for tentativa in range(3):
+                    # Segunda coluna é a de 'Conferido' (onde vamos mudar para 'Pendente')
+                    cel_conferido = celulas[1]
+
+                    # Verificar se já está marcado como 'Pendente'
                     try:
                         ancora = cel_conferido.find_element(By.CSS_SELECTOR, "a.table-editable-ancora")
-                        
-                        # Em modo headless, não fazer scroll
-                        if not self.headless_mode:
-                            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", ancora)
-                            time.sleep(0.3)
-                        
-                        # Aguardar spinner invisível
+                        texto_ancora = (ancora.text or "").strip().lower()
+                        if texto_ancora == "pendente":
+                            log_message(f"✅ Linha {idx + 1}: já está 'Pendente'", "SUCCESS")
+                            linhas_processadas += 1
+                            continue
+                    except Exception:
+                        # Se não encontrar âncora, tentar processar mesmo assim
+                        log_message(f"ℹ️ Linha {idx + 1}: âncora não encontrada, tentando processar", "INFO")
+
+                    # Tentar abrir o editor clicando na âncora
+                    clicou_ancora = False
+                    for tentativa in range(3):  # Até 3 tentativas para clicar
                         try:
-                            WebDriverWait(driver, 2).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                        except Exception:
-                            pass
-                        
-                        self.click_element(driver, ancora, "âncora")
-                        time.sleep(0.5)
-                        clicou_ancora = True
-                        log_message(f"✅ Clicou na âncora (tentativa {tentativa + 1})", "INFO")
-                        break
-                        
-                    except Exception as e:
-                        log_message(f"⚠️ Erro ao clicar na âncora (tentativa {tentativa + 1}): {e}", "WARNING")
-                        if tentativa < 2:
+                            # Re-localizar âncora para evitar stale
+                            ancora = cel_conferido.find_element(By.CSS_SELECTOR, "a.table-editable-ancora")
+                            
+                            # Em modo headless, não fazer scroll (pode causar problemas)
+                            if not self.headless_mode:
+                                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", ancora)
+                                time.sleep(0.3)
+                            
+                            # Aguardar spinner invisível
                             try:
-                                WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                                time.sleep(0.5)
+                                WebDriverWait(driver, 2).until(EC.invisibility_of_element_located((By.ID, "spinner")))
                             except Exception:
-                                time.sleep(1)
-                
-                if not clicou_ancora:
-                    log_message("❌ Não conseguiu clicar na âncora após 3 tentativas", "ERROR")
-                    return False
-
-                # Selecionar 'Pendente' no select
-                selecionou = False
-                for tentativa in range(3):
-                    try:
-                        linhas_temp = obter_linhas()
-                        if len(linhas_temp) > 0:
-                            cel_conferido_temp = linhas_temp[0].find_elements(By.CSS_SELECTOR, "td")[1]
-                            select_el = cel_conferido_temp.find_element(By.CSS_SELECTOR, "select[name='faturamentoConferido']")
+                                pass
                             
-                            # Usar JavaScript para garantir a seleção
-                            driver.execute_script("""
-                                var s = arguments[0];
-                                $(s).val('Pendente').trigger('change').trigger('blur');
-                            """, select_el)
-                            
-                            log_message(f"✅ Selecionou 'Pendente' (tentativa {tentativa + 1})", "SUCCESS")
-                            selecionou = True
-                            break
-                    except Exception as e:
-                        log_message(f"⚠️ Erro ao selecionar 'Pendente' (tentativa {tentativa + 1}): {e}", "WARNING")
-                        if tentativa < 2:
+                            # Usar método robusto de clique
+                            self.click_element(driver, ancora, f"âncora linha {idx + 1}")
                             time.sleep(0.5)
-                
-                if not selecionou:
-                    log_message("❌ Não conseguiu selecionar 'Pendente' após 3 tentativas", "ERROR")
-                    return False
+                            clicou_ancora = True
+                            log_message(f"✅ Linha {idx + 1}: clicou na âncora (tentativa {tentativa + 1})", "INFO")
+                            break
+                            
+                        except Exception as e:
+                            log_message(f"⚠️ Linha {idx + 1}: erro ao clicar na âncora (tentativa {tentativa + 1}): {e}", "WARNING")
+                            if tentativa < 2:
+                                # Aguardar spinner e tentar novamente
+                                try:
+                                    WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                                    time.sleep(0.5)
+                                except Exception:
+                                    time.sleep(1)
+                    
+                    if not clicou_ancora:
+                        log_message(f"❌ Linha {idx + 1}: não conseguiu clicar na âncora após 3 tentativas", "ERROR")
+                        continue
 
-                # Aguardar processamento (spinner)
-                try:
-                    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
-                    log_message("🔄 Processando alteração (spinner detectado)...", "INFO")
-                    WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                    log_message("✅ Processamento concluído", "SUCCESS")
-                except Exception:
-                    time.sleep(0.5)
-                    log_message("ℹ️ Sem spinner, aguardando estabilização", "INFO")
+                    # Selecionar 'Pendente' no select
+                    selecionou = False
+                    for tentativa in range(3):  # Até 3 tentativas para selecionar
+                        try:
+                            # Re-localizar a célula e o select
+                            linhas_temp = obter_linhas()
+                            if idx < len(linhas_temp):
+                                cel_conferido_temp = linhas_temp[idx].find_elements(By.CSS_SELECTOR, "td")[1]
+                                select_el = cel_conferido_temp.find_element(By.CSS_SELECTOR, "select[name='faturamentoConferido']")
+                                
+                                # Usar JavaScript para garantir a seleção
+                                driver.execute_script("""
+                                    var s = arguments[0];
+                                    $(s).val('Pendente').trigger('change').trigger('blur');
+                                """, select_el)
+                                
+                                log_message(f"✅ Linha {idx + 1}: selecionou 'Pendente' (tentativa {tentativa + 1})", "SUCCESS")
+                                selecionou = True
+                                linhas_processadas += 1
+                                break
+                        except Exception as e:
+                            log_message(f"⚠️ Linha {idx + 1}: erro ao selecionar 'Pendente' (tentativa {tentativa + 1}): {e}", "WARNING")
+                            if tentativa < 2:
+                                time.sleep(0.5)
+                    
+                    if not selecionou:
+                        log_message(f"❌ Linha {idx + 1}: não conseguiu selecionar 'Pendente' após 3 tentativas", "ERROR")
+                        continue
 
-                # Verificação final - confirmar que foi alterado para Pendente
-                time.sleep(1)
-                try:
-                    linhas_final = obter_linhas()
-                    if len(linhas_final) > 0:
-                        celulas_final = linhas_final[0].find_elements(By.CSS_SELECTOR, "td")
-                        if len(celulas_final) >= 2:
-                            ancora_final = celulas_final[1].find_element(By.CSS_SELECTOR, "a.table-editable-ancora")
-                            status_final = (ancora_final.text or "").strip().lower()
-                            if status_final == "pendente":
-                                log_message("✅ Exame marcado como 'Pendente' com sucesso (verificado)", "SUCCESS")
-                                return True
-                            else:
-                                log_message(f"⚠️ Status final: {status_final} (esperado: pendente)", "WARNING")
-                                return False
+                    # Aguardar processamento (spinner)
+                    try:
+                        WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+                        log_message(f"🔄 Linha {idx + 1}: processando alteração (spinner detectado)...", "INFO")
+                        WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                        log_message(f"✅ Linha {idx + 1}: processamento concluído", "SUCCESS")
+                    except Exception:
+                        # Sem spinner; pequena pausa
+                        time.sleep(0.5)
+                        log_message(f"ℹ️ Linha {idx + 1}: sem spinner, aguardando estabilização", "INFO")
+
                 except Exception as e:
-                    log_message(f"⚠️ Erro ao verificar status final: {e}", "WARNING")
-                    # Retornar True mesmo assim, pois a seleção foi feita
-                    return True
+                    log_message(f"❌ Erro crítico ao processar linha {idx + 1}: {e}", "ERROR")
+                    # Continuar para próxima linha mesmo com erro
+                    continue
 
-            except Exception as e:
-                log_message(f"❌ Erro crítico ao processar linha: {e}", "ERROR")
-                return False
+            log_message(f"✅ Processamento concluído: {linhas_processadas}/{total_linhas} linhas marcadas como 'Pendente'", "SUCCESS")
+            
+            # Aguardar processamento final (especialmente importante quando há apenas 1 exame)
+            log_message("⏳ Aguardando processamento final antes de continuar...", "INFO")
+            try:
+                # Tentar detectar se há spinner ativo
+                WebDriverWait(driver, 2).until(EC.presence_of_element_located((By.ID, "spinner")))
+                log_message("🔄 Spinner final detectado, aguardando conclusão...", "INFO")
+                WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                log_message("✅ Spinner final concluído", "SUCCESS")
+            except Exception:
+                # Se não houver spinner, aguardar tempo fixo para garantir
+                log_message("ℹ️ Spinner não detectado, aguardando tempo de segurança...", "INFO")
+                time.sleep(2)
+            
+            # Verificação final
+            log_message("📋 Realizando verificação final...", "INFO")
+            time.sleep(1)
+            linhas_finais = obter_linhas()
+            pendentes_final = 0
+            for linha_final in linhas_finais:
+                try:
+                    celulas_final = linha_final.find_elements(By.CSS_SELECTOR, "td")
+                    if len(celulas_final) >= 2:
+                        ancora_final = celulas_final[1].find_element(By.CSS_SELECTOR, "a.table-editable-ancora")
+                        if (ancora_final.text or "").strip().lower() == "pendente":
+                            pendentes_final += 1
+                except Exception:
+                    pass
+            
+            log_message(f"📊 Verificação final: {pendentes_final}/{len(linhas_finais)} exames estão marcados como 'Pendente'", "INFO")
+            
+            # Tempo adicional de segurança antes de fechar/prosseguir
+            if pendentes_final == total_linhas and total_linhas > 0:
+                log_message("✅ Todos os exames foram marcados com sucesso, aguardando estabilização...", "SUCCESS")
+                time.sleep(2)
+            elif pendentes_final < total_linhas:
+                log_message(f"⚠️ Alguns exames podem não ter sido marcados ({pendentes_final}/{total_linhas}), aguardando tempo adicional...", "WARNING")
+                time.sleep(3)
+            
+            return True
             
         except Exception as e:
-            log_message(f"❌ Erro ao marcar exame como 'Pendente': {e}", "ERROR")
+            log_message(f"❌ Erro ao marcar exames como 'Pendente': {e}", "ERROR")
             return False
 
     def processar_exame(self, driver, wait, dados):
