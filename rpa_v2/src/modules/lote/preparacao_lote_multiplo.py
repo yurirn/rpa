@@ -52,117 +52,303 @@ class PreparacaoLoteMultiploModule(BaseModule):
         except Exception as e:
             log_message(f"⚠️ Erro ao retornar à tela inicial: {e}", "WARNING")
 
-    def processar_lote(self, driver, wait, exames_lote: list, modo_busca: str, cancel_flag):
-        """Processa um lote de até 100 exames"""
-        resultados_lote = []
+    def fechar_sweetalert(self, driver):
+        """Fecha qualquer SweetAlert2 aberto que possa estar bloqueando a interação"""
+        try:
+            # Verificar se há SweetAlert visível
+            sweetalert = driver.find_element(By.CLASS_NAME, "swal2-container")
+            if sweetalert.is_displayed():
+                log_message("⚠️ SweetAlert detectado - fechando...", "WARNING")
 
-        for exame in exames_lote:
+                # Tentar fechar pelo botão
+                try:
+                    botao_ok = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm")
+                    botao_ok.click()
+                    time.sleep(0.5)
+                    log_message("✅ SweetAlert fechado via botão", "INFO")
+                except Exception:
+                    # Forçar fechamento via JavaScript
+                    driver.execute_script("""
+                        if (typeof Swal !== 'undefined') {
+                            Swal.close();
+                        }
+                        document.querySelectorAll('.swal2-container').forEach(el => el.remove());
+                    """)
+                    time.sleep(0.5)
+                    log_message("✅ SweetAlert fechado via JavaScript", "INFO")
+
+                return True
+        except Exception:
+            return False
+
+    def processar_lote(self, driver, wait, exames_lote: list, modo_busca: str, cancel_flag, offset: int = 0):
+        """Processa um lote de até 100 exames - PARA NA PRIMEIRA FALHA"""
+        resultados_lote = []
+        total_exames = len(exames_lote)
+
+        for idx, exame in enumerate(exames_lote, start=1):
             if cancel_flag and cancel_flag.is_set():
                 log_message("Execução cancelada pelo usuário.", "WARNING")
                 break
 
+            # Calcular posição global considerando lotes anteriores
+            posicao_global = offset + idx
+            log_message(f"➡️ Processando {modo_busca} [{posicao_global}/{offset + total_exames}]: {exame}", "INFO")
+
+            # Aguardar página estar completamente carregada
+            time.sleep(1)
+
+            self.fechar_sweetalert(driver)
+
+            # Verificar se há modais abertos e fechar
             try:
-                log_message(f"➡️ Processando {modo_busca}: {exame}", "INFO")
-                campo_id = "numeroGuia" if modo_busca == "guia" else "numeroExame"
+                modal_backdrop = driver.find_element(By.CLASS_NAME, "modal-backdrop")
+                if modal_backdrop.is_displayed():
+                    driver.execute_script("$('.modal').modal('hide');")
+                    time.sleep(0.5)
+                    log_message("🔄 Modal detectado e fechado", "INFO")
+            except Exception:
+                pass
 
-                campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
-                campo_exame.clear()
-                campo_exame.send_keys(exame)
-                time.sleep(0.5)
+            campo_id = "numeroGuia" if modo_busca == "guia" else "numeroExame"
+            log_message(f"🔍 Localizando campo de busca: {campo_id}", "INFO")
 
+            # Estratégia robusta para localizar e interagir com o campo
+            max_tentativas = 3
+            campo_preenchido = False
+
+            for tentativa in range(1, max_tentativas + 1):
                 try:
-                    botao_pesquisa = wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento")))
+                    log_message(f"🔄 Tentativa {tentativa}/{max_tentativas} de preencher campo", "INFO")
+
+                    # Aguardar elemento estar presente
+                    campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
+
+                    # Scroll até o elemento
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});",
+                                          campo_exame)
+                    time.sleep(0.5)
+
+                    # Aguardar elemento estar visível
+                    wait.until(EC.visibility_of_element_located((By.ID, campo_id)))
+
+                    # Aguardar elemento estar clicável
+                    wait.until(EC.element_to_be_clickable((By.ID, campo_id)))
+
+                    # Remover atributos que podem bloquear interação
+                    driver.execute_script("""
+                        arguments[0].removeAttribute('readonly');
+                        arguments[0].removeAttribute('disabled');
+                        arguments[0].style.pointerEvents = 'auto';
+                    """, campo_exame)
+
+                    # Limpar campo usando múltiplas estratégias
                     try:
-                        botao_pesquisa.click()
+                        campo_exame.clear()
+                        log_message("🧹 Campo limpo (método clear)", "INFO")
                     except Exception:
-                        driver.execute_script("arguments[0].click();", botao_pesquisa)
+                        driver.execute_script("arguments[0].value = '';", campo_exame)
+                        log_message("🧹 Campo limpo (JavaScript)", "INFO")
+
+                    time.sleep(0.3)
+
+                    # Tentar preencher campo
+                    try:
+                        campo_exame.send_keys(exame)
+                        log_message(f"⌨️ Valor '{exame}' inserido (send_keys)", "INFO")
+                        campo_preenchido = True
+                    except Exception:
+                        driver.execute_script("arguments[0].value = arguments[1];", campo_exame, exame)
+                        # Disparar eventos para garantir que o valor seja reconhecido
+                        driver.execute_script("""
+                            arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        """, campo_exame)
+                        log_message(f"⌨️ Valor '{exame}' inserido (JavaScript)", "INFO")
+                        campo_preenchido = True
+
+                    # Verificar se o valor foi realmente preenchido
+                    valor_atual = driver.execute_script("return arguments[0].value;", campo_exame)
+                    if valor_atual == exame:
+                        log_message(f"✅ Campo preenchido corretamente: {valor_atual}", "SUCCESS")
+                        break
+                    else:
+                        log_message(f"⚠️ Valor esperado '{exame}', obtido '{valor_atual}'", "WARNING")
+                        if tentativa < max_tentativas:
+                            time.sleep(1)
+                            continue
+
                 except Exception as e:
-                    time.sleep(1)
-                    botao_retry = driver.find_element(By.ID, "pesquisaFaturamento")
-                    driver.execute_script("arguments[0].removeAttribute('disabled');", botao_retry)
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao_retry)
-                    time.sleep(0.5)
-                    driver.execute_script("arguments[0].click();", botao_retry)
+                    log_message(f"⚠️ Erro na tentativa {tentativa}: {e}", "WARNING")
+                    if tentativa < max_tentativas:
+                        time.sleep(1)
+                    else:
+                        raise Exception(f"Falha ao preencher campo após {max_tentativas} tentativas")
 
+            if not campo_preenchido:
+                raise Exception(f"Não foi possível preencher o campo {campo_id}")
+
+            time.sleep(0.5)
+
+            log_message("🔎 Clicando no botão de pesquisa...", "INFO")
+
+            self.fechar_sweetalert(driver)
+
+            try:
+                # Estratégia 1: Aguardar elemento estar clicável
+                botao_pesquisa = wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento")))
+
+                # Tentar clicar normalmente
                 try:
-                    modal_carregando = driver.find_element(By.XPATH,
-                                                           "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
-                    if modal_carregando.is_displayed():
-                        WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                except Exception:
-                    pass
+                    botao_pesquisa.click()
+                    log_message("✅ Botão de pesquisa clicado (click normal)", "INFO")
+                except Exception as e:
+                    log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
 
+                    # Estratégia 2: Click via JavaScript
+                    driver.execute_script("arguments[0].click();", botao_pesquisa)
+                    log_message("✅ Botão de pesquisa clicado (JavaScript)", "INFO")
+
+            except Exception as e:
+                log_message(f"⚠️ Erro ao clicar no botão. Tentando localizar novamente: {e}", "WARNING")
+
+                # Estratégia 3: Localizar novamente e usar JavaScript diretamente
                 time.sleep(1)
+                botao_retry = driver.find_element(By.ID, "pesquisaFaturamento")
 
-                tbody_rows = driver.find_elements(By.CSS_SELECTOR, "#tabelaPreFaturamentoTbody tr")
-                if len(tbody_rows) == 0:
-                    log_message(f"⚠️ Nenhum resultado encontrado para {exame}. Pulando.", "WARNING")
-                    resultados_lote.append({"exame": exame, "status": "sem_resultados"})
-                    continue
+                # Remover atributo disabled se existir
+                driver.execute_script("arguments[0].removeAttribute('disabled');", botao_retry)
 
-                time.sleep(1)
+                # Scroll e click
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao_retry)
+                time.sleep(0.5)
+                driver.execute_script("arguments[0].click();", botao_retry)
+                log_message("✅ Botão de pesquisa clicado (retry com JavaScript)", "INFO")
 
-                try:
-                    checkbox = wait.until(EC.element_to_be_clickable((By.ID, "checkTodosPreFaturar")))
-                    try:
-                        checkbox.click()
-                    except Exception:
-                        driver.execute_script("arguments[0].click();", checkbox)
-                except Exception:
-                    time.sleep(1)
-                    checkbox_retry = driver.find_element(By.ID, "checkTodosPreFaturar")
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", checkbox_retry)
-                    time.sleep(0.5)
-                    driver.execute_script("arguments[0].click();", checkbox_retry)
-
-                try:
-                    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+            try:
+                modal_carregando = driver.find_element(By.XPATH,
+                                                       "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")
+                if modal_carregando.is_displayed():
+                    log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
                     WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                except Exception:
-                    pass
+                    log_message("✅ Modal de carregamento fechado", "INFO")
+            except Exception:
+                log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
 
+            time.sleep(1)
+
+            log_message("📋 Validando resultados da tabela...", "INFO")
+            tbody_rows = driver.find_elements(By.CSS_SELECTOR, "#tabelaPreFaturamentoTbody tr")
+            log_message(f"📊 Encontradas {len(tbody_rows)} linha(s) na tabela", "INFO")
+
+            if len(tbody_rows) == 0:
+                log_message(f"⚠️ Nenhum resultado encontrado para {exame}. Pulando.", "WARNING")
+                resultados_lote.append({"exame": exame, "status": "sem_resultados"})
+                continue
+
+            time.sleep(1)
+
+            log_message("☑️ Marcando checkbox 'checkTodosPreFaturar'...", "INFO")
+
+            self.fechar_sweetalert(driver)
+
+            try:
+                # Estratégia 1: Aguardar elemento estar clicável
+                checkbox = wait.until(EC.element_to_be_clickable((By.ID, "checkTodosPreFaturar")))
+
+                # Tentar clicar normalmente
+                try:
+                    checkbox.click()
+                    log_message("✅ Checkbox marcado (click normal)", "INFO")
+                except Exception as e:
+                    log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
+
+                    # Estratégia 2: Click via JavaScript
+                    driver.execute_script("arguments[0].click();", checkbox)
+                    log_message("✅ Checkbox marcado (JavaScript)", "INFO")
+
+            except Exception as e:
+                log_message(f"⚠️ Erro ao marcar checkbox. Tentando localizar novamente: {e}", "WARNING")
+
+                # Estratégia 3: Localizar novamente e usar JavaScript diretamente
                 time.sleep(1)
+                checkbox_retry = driver.find_element(By.ID, "checkTodosPreFaturar")
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", checkbox_retry)
+                time.sleep(0.5)
+                driver.execute_script("arguments[0].click();", checkbox_retry)
+                log_message("✅ Checkbox marcado (retry com JavaScript)", "INFO")
+
+            # Aguardar modal de carregamento desaparecer após marcar checkbox
+            log_message("⏳ Aguardando processamento após marcar checkbox...", "INFO")
+            try:
+                WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+                log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
+                WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                log_message("✅ Modal de carregamento fechado", "INFO")
+            except Exception:
+                log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
+
+            time.sleep(1)
+
+            log_message("🎬 Clicando no botão 'Ações'...", "INFO")
+
+            self.fechar_sweetalert(driver)
+            try:
+                # Estratégia 1: Aguardar elemento estar clicável
+                acoes_btn = wait.until(EC.element_to_be_clickable((
+                    By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
+                )))
+
+                # Tentar clicar normalmente
+                try:
+                    acoes_btn.click()
+                    log_message("✅ Botão 'Ações' clicado (click normal)", "INFO")
+                except Exception as e:
+                    log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
+
+                    # Estratégia 2: Click via JavaScript
+                    driver.execute_script("arguments[0].click();", acoes_btn)
+                    log_message("✅ Botão 'Ações' clicado (JavaScript)", "INFO")
+
+            except Exception as e:
+                log_message(f"⚠️ Erro ao clicar no botão 'Ações'. Tentando localizar novamente: {e}", "WARNING")
 
                 try:
-                    acoes_btn = wait.until(EC.element_to_be_clickable((
-                        By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
-                    )))
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", acoes_btn)
-                    time.sleep(0.5)
-                    try:
-                        acoes_btn.click()
-                    except Exception:
-                        driver.execute_script("arguments[0].click();", acoes_btn)
-                except Exception:
                     time.sleep(1)
                     acoes_retry = driver.find_element(By.XPATH,
                                                       "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]")
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", acoes_retry)
                     time.sleep(0.5)
                     driver.execute_script("arguments[0].click();", acoes_retry)
+                    log_message("✅ Botão 'Ações' clicado (retry com JavaScript)", "INFO")
+                except Exception as e2:
+                    log_message(f"❌ Falha ao clicar no botão 'Ações' após tentativas: {e2}", "ERROR")
+                    raise
 
-                time.sleep(1)
+            time.sleep(1)
 
-                driver.execute_script("""
-                    const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
-                    if (onlineBtn) { onlineBtn.click(); }
-                """)
+            log_message("📡 Executando script para selecionar status 'Online'...", "INFO")
+            driver.execute_script("""
+                const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
+                if (onlineBtn) { onlineBtn.click(); }
+            """)
+            log_message("✅ Script executado - Status 'Online' selecionado", "INFO")
 
-                time.sleep(1)
+            time.sleep(1)
 
-                if modo_busca == "guia":
-                    try:
-                        WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
-                        WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
-                    except Exception:
-                        time.sleep(1)
+            if modo_busca == "guia":
+                log_message("🔄 Modo guia detectado - Aguardando processamento adicional...", "INFO")
+                try:
+                    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, "spinner")))
+                    log_message("🔄 Modal de carregamento detectado, aguardando...", "INFO")
+                    WebDriverWait(driver, 30).until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                    log_message("✅ Modal de carregamento fechado", "INFO")
+                except Exception:
+                    log_message("ℹ️ Modal não detectado. Prosseguindo...", "INFO")
+                    time.sleep(1)
 
-                resultados_lote.append({"exame": exame, "status": "sucesso"})
-                log_message(f"✅ {modo_busca.title()} {exame} processado com sucesso.", "SUCCESS")
-
-            except Exception as e:
-                resultados_lote.append({"exame": exame, "status": "erro", "erro": str(e)})
-                log_message(f"❌ Erro ao processar {exame}: {e}", "ERROR")
+            resultados_lote.append({"exame": exame, "status": "sucesso"})
+            log_message(f"✅ {modo_busca.title()} {exame} processado com sucesso.", "SUCCESS")
 
         return resultados_lote
 
@@ -328,6 +514,7 @@ class PreparacaoLoteMultiploModule(BaseModule):
             ))).click()
             time.sleep(1)
 
+            offset_global = 0
             # Processar cada lote sequencialmente
             for idx, lote in enumerate(lotes, start=1):
                 if cancel_flag and cancel_flag.is_set():
@@ -339,8 +526,10 @@ class PreparacaoLoteMultiploModule(BaseModule):
                 log_message(f"{'=' * 60}\n", "INFO")
 
                 # Processar o lote atual
-                resultados_lote = self.processar_lote(driver, wait, lote, modo_busca, cancel_flag)
+                resultados_lote = self.processar_lote(driver, wait, lote, modo_busca, cancel_flag, offset=offset_global)
                 todos_resultados.extend(resultados_lote)
+
+                offset_global += len(lote)
 
                 # Resumo do lote atual
                 sucesso_lote = [r for r in resultados_lote if r["status"] == "sucesso"]
