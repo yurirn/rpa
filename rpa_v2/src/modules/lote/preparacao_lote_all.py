@@ -69,7 +69,7 @@ class PreparacaoLoteModule(BaseModule):
         log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
         current_url = driver.current_url
 
-        if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+        if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
             log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
             try:
                 modulo_link = wait.until(
@@ -80,7 +80,7 @@ class PreparacaoLoteModule(BaseModule):
             except Exception as e:
                 log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
                 # Tentar navegar diretamente pela URL como fallback
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -89,7 +89,7 @@ class PreparacaoLoteModule(BaseModule):
         else:
             log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
             # Tentar navegar diretamente como fallback
-            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
             time.sleep(2)
             log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
@@ -362,7 +362,7 @@ class PreparacaoLoteModule(BaseModule):
             messagebox.showerror("Erro", "Nenhum exame encontrado no arquivo.")
             return
 
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         driver = BrowserFactory.create_chrome(headless=headless_mode)
         wait = WebDriverWait(driver, 15)
         resultados = []

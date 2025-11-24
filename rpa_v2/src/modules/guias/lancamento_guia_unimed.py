@@ -910,7 +910,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
             log_message("🔐 Fazendo login no PathoWeb...", "INFO")
             
             # URL do PathoWeb
-            url = "https://pathoweb.com.br/login/auth"
+            url = "https://dap.pathoweb.com.br/login/auth"
             driver.get(url)
             
             # Preencher credenciais
@@ -922,7 +922,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
             log_message("Verificando se precisa navegar para módulo de faturamento...", "INFO")
             current_url = driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de faturamento...", "INFO")
                 try:
                     modulo_link = self.wait_for_element(driver, wait, By.CSS_SELECTOR,
@@ -932,7 +932,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
                     log_message("✅ Navegação para módulo de faturamento realizada", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                     time.sleep(2)
                     log_message("🔄 Navegação direta para módulo realizada", "INFO")
 
@@ -940,7 +940,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
                 log_message("✅ Já está no módulo de faturamento - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
@@ -956,7 +956,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
 
             # Acessar explicitamente a página do módulo de faturamento
             log_message("Acessando módulo de faturamento via URL...", "INFO")
-            driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+            driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
 
             # Clicar no botão "Preparar exames para fatura"
             log_message("Clicando em 'Preparar exames para fatura'...", "INFO")
@@ -1952,7 +1952,7 @@ class LancamentoGuiaUnimedModule(BaseModule):
                                 if i < len(guias_para_abrir):
                                     log_message(f"🔄 Retornando para página de busca para próximo exame ({i+1}/{len(guias_para_abrir)})...", "INFO")
                                     try:
-                                        driver.get("https://pathoweb.com.br/moduloFaturamento/index")
+                                        driver.get("https://dap.pathoweb.com.br/moduloFaturamento/index")
                                         time.sleep(2)
                                         
                                         # Clicar em "Preparar exames para fatura" novamente

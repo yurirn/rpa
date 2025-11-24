@@ -510,7 +510,7 @@ class CriacaoExamesHclSus(BaseModule):
         """Executa a criação de exames para todos os arquivos"""
         username = params.get("username")
         password = params.get("password")
-        url = params.get("url", "https://pathoweb.com.br/login/auth")
+        url = params.get("url", "https://dap.pathoweb.com.br/login/auth")
 
         # Processar todos os arquivos com OCR
         try:

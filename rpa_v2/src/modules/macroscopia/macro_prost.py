@@ -1205,7 +1205,7 @@ class MacroProstModule(BaseModule):
             messagebox.showerror("Erro", f"Erro ao ler planilha:\n{e}")
             return
 
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         driver = None
         resultados = []
 
@@ -1235,7 +1235,7 @@ class MacroProstModule(BaseModule):
             log_message("Verificando se precisa navegar para módulo de exames...", "INFO")
             current_url = driver.current_url
 
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 log_message("Detectada tela de seleção de módulos - navegando para módulo de exames...", "INFO")
                 try:
                     modulo_link = wait.until(
@@ -1245,14 +1245,14 @@ class MacroProstModule(BaseModule):
                     log_message("✅ Navegou para o módulo de exames", "SUCCESS")
                 except Exception as e:
                     log_message(f"⚠️ Erro ao navegar para módulo: {e}", "WARNING")
-                    driver.get("https://pathoweb.com.br/moduloExame/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloExame/index")
                     time.sleep(2)
 
             elif "moduloExame" in current_url:
                 log_message("✅ Já está no módulo de exames - pulando navegação", "SUCCESS")
             else:
                 log_message(f"⚠️ URL inesperada detectada: {current_url}", "WARNING")
-                driver.get("https://pathoweb.com.br/moduloExame/index")
+                driver.get("https://dap.pathoweb.com.br/moduloExame/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 

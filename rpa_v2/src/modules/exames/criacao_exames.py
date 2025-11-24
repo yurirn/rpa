@@ -283,7 +283,7 @@ class ExamAutomation(BaseModule):
     def run(self, params):
         username = params.get("username")
         password = params.get("password")
-        url = params.get("url", "https://pathoweb.com.br/login/auth")
+        url = params.get("url", "https://dap.pathoweb.com.br/login/auth")
         cancel_flag = params.get("cancel_flag")
         self.setup(url)
         try:

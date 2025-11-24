@@ -312,7 +312,7 @@ class LiberacaoGeorgeModule(BaseModule):
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
             return
 
-        url = os.getenv("SYSTEM_URL", "https://pathoweb.com.br/login/auth")
+        url = os.getenv("SYSTEM_URL", "https://dap.pathoweb.com.br/login/auth")
         driver = None
         resultados = []
 
@@ -342,7 +342,7 @@ class LiberacaoGeorgeModule(BaseModule):
             # Navegar para módulo de exames
             log_message("Verificando se precisa navegar para módulo de exames...", "INFO")
             current_url = driver.current_url
-            if current_url == "https://pathoweb.com.br/" or "trocarModulo" in current_url:
+            if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 try:
                     modulo_link = wait.until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
@@ -350,7 +350,7 @@ class LiberacaoGeorgeModule(BaseModule):
                     time.sleep(2)
                     log_message("✅ Navegação para módulo de exames realizada", "SUCCESS")
                 except Exception:
-                    driver.get("https://pathoweb.com.br/moduloExame/index")
+                    driver.get("https://dap.pathoweb.com.br/moduloExame/index")
                     time.sleep(2)
 
             # Fechar modal se aparecer
