@@ -199,7 +199,8 @@ class MacroProstModule(BaseModule):
             'ELLEN': 'Ellen Andressa de Alvarenga',
             'VITORIA': 'Vitoria Aquino Nairne Domingues',
             'ANNAI': 'Annai Lukã Vitorino Losnak',
-            'ANA': 'Ana Carolina Viecele Campos'
+            'ANA': 'Ana Carolina Viecele Campos',
+            'PAOLA': 'Paola Galdino Souza'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(
