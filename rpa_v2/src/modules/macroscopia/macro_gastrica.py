@@ -276,7 +276,8 @@ class MacroGastricaModule(BaseModule):
             'VITORIA': 'Vitoria Aquino Nairne Domingues',
             'ANNAI': 'Annai Lukã Vitorino Losnak',
             'ANA' : 'Ana Carolina Viecele Campos',
-            'LEILA': 'Leila dos Santos Martins'
+            'LEILA': 'Leila dos Santos Martins',
+            'PAOLA': 'Paola Galdino Souza'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(

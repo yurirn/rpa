@@ -55,7 +55,7 @@ class UnimedUploader(BaseModule):
 
     def selecionar_versao_upload(self):
         data_atual = datetime.now()
-        data_corte = datetime(2024, 11, 30)
+        data_corte = datetime(2025, 11, 30)
         versao = "4.02.00" if data_atual >= data_corte else "4.01.00"
 
         log_message(f"Selecionando versão {versao} para upload...", "INFO")
