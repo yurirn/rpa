@@ -369,6 +369,15 @@ class LancamentoFinanceiroModule(BaseModule):
         tipo_transacao = str(row.get("Tipo de transação", "")).strip()
         tipo = str(row.get("Tipo", "")).strip()
         envolvido = str(row.get("Envolvido", "")).strip()
+        # Dias para vencimento (Coluna L)
+        dias_vencimento = str(row.get("Dias para Vencimento", "")).strip()
+        if not dias_vencimento:
+            dias_vencimento = "30"
+        try:
+            dias_int = int(float(dias_vencimento))
+            dias_vencimento = str(max(dias_int, 0))
+        except (ValueError, TypeError):
+            dias_vencimento = "30"
 
         # Preencher datas via JavaScript
         if competencia:
@@ -426,7 +435,7 @@ class LancamentoFinanceiroModule(BaseModule):
 
         campo_dias = self.wait.until(EC.visibility_of_element_located((By.NAME, "numeroDias")))
         campo_dias.clear()
-        campo_dias.send_keys("30")
+        campo_dias.send_keys(str(dias_vencimento))
 
         if observacao:
             campo = self.wait.until(EC.visibility_of_element_located((By.ID, "observacao")))

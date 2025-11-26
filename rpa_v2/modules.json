@@ -124,6 +124,16 @@
     "requires_unimed_credentials": false
   },
   {
+    "id": "guia_unimed_exames",
+    "name": "Guia Unimed [Exames]",
+    "description": "Consulta cada guia no módulo de exames usando o código de barras do Excel.",
+    "module_path": "modules.guias.guia_unimed_exames",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": true
+  },
+  {
     "id": "lancamento_guia_unimed",
     "name": "Lançamento Guia Unimed",
     "description": "Faz login na Unimed e acessa página de lançamento de procedimentos",
