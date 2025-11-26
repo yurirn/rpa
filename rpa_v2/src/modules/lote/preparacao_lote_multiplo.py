@@ -293,46 +293,79 @@ class PreparacaoLoteMultiploModule(BaseModule):
             log_message("🎬 Clicando no botão 'Ações'...", "INFO")
 
             self.fechar_sweetalert(driver)
-            try:
-                # Estratégia 1: Aguardar elemento estar clicável
-                acoes_btn = wait.until(EC.element_to_be_clickable((
-                    By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
-                )))
-
-                # Tentar clicar normalmente
-                try:
-                    acoes_btn.click()
-                    log_message("✅ Botão 'Ações' clicado (click normal)", "INFO")
-                except Exception as e:
-                    log_message(f"⚠️ Click normal falhou: {e}. Tentando JavaScript...", "WARNING")
-
-                    # Estratégia 2: Click via JavaScript
-                    driver.execute_script("arguments[0].click();", acoes_btn)
-                    log_message("✅ Botão 'Ações' clicado (JavaScript)", "INFO")
-
-            except Exception as e:
-                log_message(f"⚠️ Erro ao clicar no botão 'Ações'. Tentando localizar novamente: {e}", "WARNING")
-
-                try:
-                    time.sleep(1)
-                    acoes_retry = driver.find_element(By.XPATH,
-                                                      "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]")
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", acoes_retry)
-                    time.sleep(0.5)
-                    driver.execute_script("arguments[0].click();", acoes_retry)
-                    log_message("✅ Botão 'Ações' clicado (retry com JavaScript)", "INFO")
-                except Exception as e2:
-                    log_message(f"❌ Falha ao clicar no botão 'Ações' após tentativas: {e2}", "ERROR")
-                    raise
-
             time.sleep(1)
 
-            log_message("📡 Executando script para selecionar status 'Online'...", "INFO")
-            driver.execute_script("""
-                const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
-                if (onlineBtn) { onlineBtn.click(); }
-            """)
-            log_message("✅ Script executado - Status 'Online' selecionado", "INFO")
+            # Laço para garantir que o status seja alterado para "Online"
+            max_tentativas_status = 3
+            status_alterado = False
+            for tentativa_status in range(1, max_tentativas_status + 1):
+                log_message(f"🔄 Tentativa {tentativa_status}/{max_tentativas_status} para definir status como 'Online'",
+                            "INFO")
+
+                # Clicar no botão 'Ações'
+                try:
+                    acoes_btn = wait.until(EC.element_to_be_clickable((
+                        By.XPATH, "//a[contains(@class, 'toggleMaisDeUm') and contains(., 'Ações')]"
+                    )))
+                    driver.execute_script("arguments[0].click();", acoes_btn)
+                    log_message("✅ Botão 'Ações' clicado", "INFO")
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao clicar em 'Ações' na tentativa {tentativa_status}: {e}", "WARNING")
+                    time.sleep(1)
+                    continue  # Tenta novamente desde o clique em 'Ações'
+
+                time.sleep(1)
+
+                # Clicar na opção 'Online'
+                log_message("📡 Executando script para selecionar status 'Online'...", "INFO")
+                driver.execute_script("""
+                                const onlineBtn = document.querySelector("a[data-url*='statusConferido=O']");
+                                if (onlineBtn) { onlineBtn.click(); }
+                            """)
+                log_message("✅ Script para 'Online' executado", "INFO")
+
+                # Aguardar o processamento (ex: spinner desaparecer)
+                try:
+                    spinner_wait = WebDriverWait(driver, 10)
+                    spinner_wait.until(EC.invisibility_of_element_located((By.ID, "spinner")))
+                    log_message("✅ Processamento do status concluído (spinner desapareceu)", "INFO")
+                except Exception:
+                    log_message("ℹ️ Spinner não detectado ou já invisível, aguardando fixo.", "INFO")
+                    time.sleep(2)  # Aguarda um tempo fixo se o spinner não for encontrado
+
+                # Validar se o status na tabela foi alterado para "On-line"
+                try:
+                    wait.until(EC.text_to_be_present_in_element(
+                        (By.CSS_SELECTOR,
+                         "#tabelaPreFaturamentoTbody tr:first-child td:nth-child(2) a.table-editable-ancora"),
+                        "On-line"
+                    ))
+
+                    status_text = driver.find_element(By.CSS_SELECTOR,
+                                                      "#tabelaPreFaturamentoTbody tr:first-child td:nth-child(2)").text.strip()
+                    log_message(f"🔍 Status atual na tabela: '{status_text}'", "INFO")
+
+                    if "on-line" in status_text.lower():
+                        log_message("✅ Validação bem-sucedida: Status é 'On-line'.", "SUCCESS")
+                        status_alterado = True
+                        break  # Sai do laço de tentativas
+                    else:
+                        # Esta parte agora é menos provável de ser alcançada, mas mantida como segurança.
+                        log_message(f"⚠️ Status ainda não é 'On-line' ({status_text}). Tentando novamente...",
+                                    "WARNING")
+                        driver.execute_script("$('body').click();")  # Fecha menus abertos
+                        time.sleep(1)
+
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao validar o status na tabela (tentativa {tentativa_status}): {e}", "WARNING")
+                    # Se a espera falhar, o menu de ações pode ter fechado. Clicar no corpo para garantir.
+                    driver.execute_script("$('body').click();")
+                    time.sleep(1)
+
+            if not status_alterado:
+                log_message(f"❌ Falha ao alterar o status para 'Online' após {max_tentativas_status} tentativas.","ERROR")
+                # Você pode decidir se quer parar a execução ou apenas registrar o erro
+                raise Exception("Não foi possível alterar o status para Online.")
 
             time.sleep(1)
 
@@ -354,12 +387,12 @@ class PreparacaoLoteMultiploModule(BaseModule):
 
     def gerar_ou_enviar_lote(self, driver, wait, gera_xml_tiss: str, username: str, password: str,
                              unimed_user: str, unimed_pass: str, pasta_download: str,
-                             headless_mode: bool, cancel_flag, modo_busca: str, numero_lote: int):
+                             headless_mode: bool, cancel_flag, modo_busca: str, numero_lote: int, total_exames_lote: int):
         """Gera ou envia o lote após preparação"""
         if gera_xml_tiss == "sim":
             log_message(f"📤 Gerando e enviando XML para Unimed - Lote {numero_lote}...", "INFO")
             automacao = XMLGeneratorAutomation(username, password, pasta_download=pasta_download,headless=headless_mode)
-            sucesso_envio = automacao.executar_processo_completo_login_navegacao(unimed_user, unimed_pass, cancel_flag=cancel_flag)
+            sucesso_envio = automacao.executar_processo_completo_login_navegacao(unimed_user, unimed_pass,cancel_flag=cancel_flag, total_exames_lote=total_exames_lote)
             if not sucesso_envio:
                 log_message(f"❌ Falha ao processar/enviar lote {numero_lote} para Unimed.", "ERROR")
                 return False
@@ -544,7 +577,7 @@ class PreparacaoLoteMultiploModule(BaseModule):
                 # Gerar/enviar lote após processamento
                 self.gerar_ou_enviar_lote(driver, wait, gera_xml_tiss, username, password,
                                           unimed_user, unimed_pass, pasta_download, headless_mode,
-                                          cancel_flag, modo_busca, idx)
+                                          cancel_flag, modo_busca, idx, total_exames_lote=len(lote))
 
                 # Se não for o último lote, retornar à tela inicial
                 if idx < total_lotes:
