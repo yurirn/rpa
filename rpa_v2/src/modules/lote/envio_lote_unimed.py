@@ -2,6 +2,7 @@ import os
 import time
 import zipfile
 import traceback
+import re
 from datetime import datetime
 from pathlib import Path
 from selenium import webdriver
@@ -119,12 +120,10 @@ class XMLGeneratorAutomation(BaseModule):
     def fazer_login(self):
         log_message("Fazendo login no Pathoweb...", "INFO")
         self.driver.get("https://dap.pathoweb.com.br/login/auth")
-        campo_usuario = self.wait.until(EC.presence_of_element_located((By.ID, "username")))
-        campo_usuario.send_keys(self.username)
-        campo_senha = self.driver.find_element(By.ID, "password")
-        campo_senha.send_keys(self.password)
-        botao_login = self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        botao_login.click()
+        self.wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(self.username)
+        self.driver.find_element(By.ID, "password").send_keys(self.password)
+        self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+        time.sleep(0.5)
         self.wait.until(lambda driver: "login" not in driver.current_url.lower())
 
     def acessar_modulo_faturamento(self):
@@ -395,6 +394,45 @@ class XMLGeneratorAutomation(BaseModule):
             log_message(f"Stack trace:\n{erro_filtros}", "ERROR")
             raise
 
+    def validar_contagem_exames(self, total_exames_esperado: int):
+        """Valida se a contagem de exames na tela corresponde ao esperado."""
+        if total_exames_esperado == 0:
+            log_message("Nenhum exame esperado para validação, pulando.", "INFO")
+            return
+
+        log_message(f"🔍 Validando contagem de exames. Esperado: {total_exames_esperado}", "INFO")
+        try:
+            # Seletor para o <p> que contém o texto "Total: exames..."
+            seletor_p = "div.h5 > p"
+
+            # Espera explícita para garantir que o texto seja carregado
+            wait = WebDriverWait(self.driver, 15)
+            elemento_p = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, seletor_p)))
+
+            texto_total = elemento_p.text
+            log_message(f"Texto encontrado na tela: '{texto_total}'", "INFO")
+
+            # Extrair o número de exames usando regex
+            match = re.search(r"exames\s+(\d+)", texto_total)
+            if not match:
+                log_message("❌ Não foi possível encontrar a contagem de 'exames' no texto da tela.", "ERROR")
+                raise Exception("Formato do texto de totais inesperado.")
+
+            contagem_tela = int(match.group(1))
+            log_message(f"Contagem na tela: {contagem_tela}", "INFO")
+
+            if contagem_tela == total_exames_esperado:
+                log_message("✅ Validação bem-sucedida: a contagem de exames bate com o esperado.", "SUCCESS")
+            else:
+                log_message(f"❌ Validação falhou! Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}",
+                            "ERROR")
+                raise Exception(
+                    f"Divergência na contagem de exames do lote. Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}")
+
+        except Exception as e:
+            log_message(f"❌ Erro crítico durante a validação da contagem de exames: {e}", "ERROR")
+            raise
+
     def enviar_para_unimed(self, arquivos_extraidos, unimed_user, unimed_pass):
         try:
             log_message("Iniciando processo de upload para Unimed...", "INFO")
@@ -482,7 +520,7 @@ class XMLGeneratorAutomation(BaseModule):
         log_message("❌ Página não carregou corretamente após múltiplas tentativas", "ERROR")
         return False
 
-    def executar_processo_completo_sem_login(self, unimed_user, unimed_pass, cancel_flag=None):
+    def executar_processo_completo_sem_login(self, unimed_user, unimed_pass, cancel_flag=None, total_exames_lote=0):
         """
         Executa o processo completo de geração e envio do XML reutilizando o driver já aberto.
         Não faz login novamente, assume que o driver já está autenticado no Pathoweb.
@@ -547,6 +585,9 @@ class XMLGeneratorAutomation(BaseModule):
             
             log_message("Configurando filtros e executando pesquisa...", "INFO")
             self.configurar_filtros_e_pesquisar()
+
+            log_message("Validando contagem de exames...", "INFO")
+            self.validar_contagem_exames(total_exames_lote)
             
             if cancel_flag and cancel_flag.is_set():
                 log_message("Execução cancelada pelo usuário.", "WARNING")
@@ -575,7 +616,7 @@ class XMLGeneratorAutomation(BaseModule):
             log_message(f"Stack trace completo:\n{erro_completo}", "ERROR")
             return False
 
-    def executar_processo_completo_login_navegacao(self, unimed_user, unimed_pass, cancel_flag=None):
+    def executar_processo_completo_login_navegacao(self, unimed_user, unimed_pass, cancel_flag=None, total_exames_lote=0):
         try:
             log_message("Iniciando automação de envio de lote Unimed...", "INFO")
             self.inicializar_driver()
@@ -619,6 +660,7 @@ class XMLGeneratorAutomation(BaseModule):
             self.fechar_modal_se_necessario()
             self.acessar_preparar_exames_para_fatura()
             self.configurar_filtros_e_pesquisar()
+            self.validar_contagem_exames(total_exames_lote)
             if cancel_flag and cancel_flag.is_set():
                 log_message("Execução cancelada pelo usuário.", "WARNING")
                 self.fechar_navegador()
