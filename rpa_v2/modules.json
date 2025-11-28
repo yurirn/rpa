@@ -11,7 +11,7 @@
   },
   {
     "id": "preparacao_lote",
-    "name": "Preparação e Geração Lote - Envio Unimed (Aba Única)",
+    "name": "Preparação e Geração Lote - Manual",
     "description": "Lê arquivo Excel e marca exames como 'Conferido: On-line, caso o checkbox de Gerar XML TISS esteja marcado faz o envio para a Unimed, caso não esteja marcado apenas gera o lote.'",
     "module_path": "modules.lote.preparacao_lote",
     "requires_excel": true,
@@ -115,7 +115,7 @@
   },
   {
     "id": "guia_unimed",
-    "name": "Guia Unimed e Hospitalar",
+    "name": "1ª Etapa - Abertura de Guia Unimed e Hospitalar",
     "description": "Automatiza o processo de guias da Unimed",
     "module_path": "modules.guias.guia_unimed",
     "requires_excel": true,
@@ -135,7 +135,7 @@
   },
   {
     "id": "lancamento_guia_unimed",
-    "name": "Lançamento Guia Unimed",
+    "name": "2ª Etapa - Abertura de Guia Unimed + Patho",
     "description": "Faz login na Unimed e acessa página de lançamento de procedimentos",
     "module_path": "modules.guias.lancamento_guia_unimed",
     "requires_excel": true,
@@ -145,7 +145,7 @@
   },
   {
     "id": "lancamento_guia_hospitalar",
-    "name": "Lançamento Guia Hospitalar",
+    "name": "2ª Etapa - Abertura de Guia Hospitalar + Patho",
     "description": "Realiza o lançamento de procedimentos no portal Hospitalar",
     "module_path": "modules.guias.lacamento_guia_hospitalar",
     "requires_excel": true,
