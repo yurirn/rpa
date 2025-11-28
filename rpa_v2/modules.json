@@ -178,9 +178,19 @@
   },
   {
     "id": "lancamento_financeiro",
-    "name": "Lançamento Financeiro",
+    "name": "Financeiro - Lançamento",
     "description": "Lê planilha Excel e lança receitas/despesas no Pathoweb.",
     "module_path": "modules.financeiro.lancamento",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
+  },
+  {
+    "id": "baixa_recurso",
+    "name": "Financeiro - Baixa de Recurso",
+    "description": "Lê planilha Excel e faz a baixa de recursos no Pathoweb.",
+    "module_path": "modules.financeiro.baixa_recurso",
     "requires_excel": true,
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
