@@ -55,14 +55,10 @@ class UnimedUploader(BaseModule):
         self.driver.get(url_pos_login)
 
     def selecionar_versao_upload(self):
-        data_atual = datetime.now()
-        data_corte = datetime(2025, 11, 30)
-        versao = "4.02.00" if data_atual >= data_corte else "4.01.00"
-
-        log_message(f"Selecionando versão {versao} para upload...", "INFO")
+        log_message(f"Selecionando versão 4.02.00 para upload...", "INFO")
         select_element = self.wait.until(EC.presence_of_element_located((By.ID, "versao")))
         select_obj = Select(select_element)
-        select_obj.select_by_value(versao)
+        select_obj.select_by_value("4.02.00")
 
     def selecionar_arquivo_upload(self, caminho_arquivo):
         log_message(f"Selecionando arquivo para upload: {caminho_arquivo}", "INFO")
@@ -395,43 +391,51 @@ class XMLGeneratorAutomation(BaseModule):
             raise
 
     def validar_contagem_exames(self, total_exames_esperado: int):
-        """Valida se a contagem de exames na tela corresponde ao esperado."""
+        """Valida se a contagem de exames na tela corresponde ao esperado, com múltiplas tentativas."""
         if total_exames_esperado == 0:
             log_message("Nenhum exame esperado para validação, pulando.", "INFO")
             return
 
-        log_message(f"🔍 Validando contagem de exames. Esperado: {total_exames_esperado}", "INFO")
-        try:
-            # Seletor para o <p> que contém o texto "Total: exames..."
-            seletor_p = "div.h5 > p"
+        max_tentativas = 3
+        for tentativa in range(1, max_tentativas + 1):
+            log_message(f"🔍 Validando contagem de exames (Tentativa {tentativa}/{max_tentativas}). Esperado: {total_exames_esperado}", "INFO")
+            try:
+                # Seletor para o <p> que contém o texto "Total: exames..."
+                seletor_p = "div.h5 > p"
 
-            # Espera explícita para garantir que o texto seja carregado
-            wait = WebDriverWait(self.driver, 15)
-            elemento_p = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, seletor_p)))
+                # Espera explícita para garantir que o texto seja carregado
+                wait = WebDriverWait(self.driver, 15)
+                elemento_p = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, seletor_p)))
 
-            texto_total = elemento_p.text
-            log_message(f"Texto encontrado na tela: '{texto_total}'", "INFO")
+                texto_total = elemento_p.text
+                log_message(f"Texto encontrado na tela: '{texto_total}'", "INFO")
 
-            # Extrair o número de exames usando regex
-            match = re.search(r"exames\s+(\d+)", texto_total)
-            if not match:
-                log_message("❌ Não foi possível encontrar a contagem de 'exames' no texto da tela.", "ERROR")
-                raise Exception("Formato do texto de totais inesperado.")
+                # Extrair o número de exames usando regex
+                match = re.search(r"exames\s+(\d+)", texto_total)
+                if not match:
+                    log_message("❌ Não foi possível encontrar a contagem de 'exames' no texto da tela.", "ERROR")
+                    raise Exception("Formato do texto de totais inesperado.")
 
-            contagem_tela = int(match.group(1))
-            log_message(f"Contagem na tela: {contagem_tela}", "INFO")
+                contagem_tela = int(match.group(1))
+                log_message(f"Contagem na tela: {contagem_tela}", "INFO")
 
-            if contagem_tela == total_exames_esperado:
-                log_message("✅ Validação bem-sucedida: a contagem de exames bate com o esperado.", "SUCCESS")
-            else:
-                log_message(f"❌ Validação falhou! Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}",
-                            "ERROR")
-                raise Exception(
-                    f"Divergência na contagem de exames do lote. Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}")
+                if contagem_tela == total_exames_esperado:
+                    log_message("✅ Validação bem-sucedida: a contagem de exames bate com o esperado.", "SUCCESS")
+                    return  # Sucesso, sai do método
+                else:
+                    # Erro lógico, não adianta tentar de novo. Lança a exceção imediatamente.
+                    log_message(f"❌ Validação falhou! Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}", "ERROR")
+                    raise Exception(
+                        f"Divergência na contagem de exames do lote. Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}")
 
-        except Exception as e:
-            log_message(f"❌ Erro crítico durante a validação da contagem de exames: {e}", "ERROR")
-            raise
+            except Exception as e:
+                log_message(f"⚠️ Erro na tentativa {tentativa} de validação: {e}", "WARNING")
+                if tentativa < max_tentativas:
+                    log_message("Aguardando 2 segundos antes de tentar novamente...", "INFO")
+                    time.sleep(2)
+                else:
+                    log_message(f"❌ Erro crítico após {max_tentativas} tentativas de validação da contagem.", "ERROR")
+                    raise  # Lança a última exceção após todas as tentativas falharem
 
     def enviar_para_unimed(self, arquivos_extraidos, unimed_user, unimed_pass):
         try:
