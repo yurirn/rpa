@@ -43,17 +43,6 @@
     "has_cobrar_de": true
   },
   {
-    "id": "conclusao",
-    "name": "Conclusão de Exame",
-    "description": "",
-    "module_path": "modules.conclusao",
-    "requires_excel": true,
-    "tipo_busca": false,
-    "has_gera_xml_tiss": false,
-    "requires_unimed_credentials": false,
-    "has_pular_para_laudos": true
-  },
-  {
     "id": "liberacao_george",
     "name": "Liberação de Exame - George",
     "description": "",
@@ -65,7 +54,7 @@
   },
   {
     "id": "macroscopia",
-    "name": "Macroscopia - Papacon/Papaliq",
+    "name": "Citologia - Papacon/Papaliq",
     "description": "",
     "module_path": "modules.macroscopia.macroscopia",
     "requires_excel": true,
@@ -74,8 +63,19 @@
     "requires_unimed_credentials": false
   },
   {
+    "id": "conclusao",
+    "name": "Digitação - Conclusão sem alteração",
+    "description": "",
+    "module_path": "modules.conclusao",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false,
+    "has_pular_para_laudos": true
+  },
+  {
     "id": "macro_gastrica",
-    "name": "Macro Gástrica",
+    "name": "Digitação - Macro 1 e 2 frascos",
     "description": "",
     "module_path": "modules.macroscopia.macro_gastrica",
     "requires_excel": true,
@@ -85,7 +85,7 @@
   },
   {
     "id": "macro_amiade",
-    "name": "Macro Amiade",
+    "name": "Digitação - Amiade",
     "description": "Realiza o processo de preenchimento das mascaras Amiade e Ami.",
     "module_path": "modules.macroscopia.macro_amiade",
     "requires_excel": true,
@@ -95,7 +95,7 @@
   },
   {
     "id": "macro_sept",
-    "name": "Macro Sept",
+    "name": "Digitação - Sept",
     "description": "Realiza o processo de preenchimento das mascaras SEPT, ST e TS.",
     "module_path": "modules.macroscopia.macro_sept",
     "requires_excel": true,
@@ -105,7 +105,7 @@
   },
   {
     "id": "macro_prost",
-    "name": "Macro Prost",
+    "name": "Digitação - Próstata",
     "description": "Realiza o processo de preenchimento das mascaras PROSTATA12F E PROSTATA6B",
     "module_path": "modules.macroscopia.macro_prost",
     "requires_excel": true,

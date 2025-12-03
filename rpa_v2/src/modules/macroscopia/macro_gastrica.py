@@ -6,6 +6,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.action_chains import ActionChains
 from dotenv import load_dotenv
 from openpyxl import load_workbook
 
@@ -52,27 +53,40 @@ class MacroGastricaModule(BaseModule):
             col_codigo = encontrar_coluna(['codigo', 'código', 'cod', 'num_exame', 'numero', 'número'])
             col_mascara = encontrar_coluna(['mascara', 'máscara', 'mask'])
             col_responsavel = encontrar_coluna(['responsavel', 'responsável', 'resp', 'macroscopista'])
-            col_campo_d = encontrar_coluna(['fragmentos', 'quantidade', 'qtd_frag', 'qtd', 'campo d', 'd'])
-            col_campo_e = encontrar_coluna(['medida 1', 'med1', 'medida1', 'md1', 'campo e', 'e'])
-            col_campo_f = encontrar_coluna(['medida 2', 'med2', 'medida2', 'md2', 'campo f', 'f'])
-            col_campo_g = encontrar_coluna(['medida 3', 'med3', 'medida3', 'md3', 'campo g', 'g'])
+            col_qtd_frag = encontrar_coluna(['qtd_frag', 'qtd frag', 'fragmentos', 'quantidade', 'qtd'])
+            col_qtd_frag2 = encontrar_coluna(['qtd_frag_2', 'qtd frag 2', 'fragmentos2', 'quantidade2', 'qtd2'])
+            col_md1 = encontrar_coluna(['md1', 'medida 1', 'med1', 'medida1', 'campo e', 'e'])
+            col_md2 = encontrar_coluna(['md2', 'medida 2', 'med2', 'medida2', 'campo f', 'f'])
+            col_md3 = encontrar_coluna(['md3', 'medida 3', 'med3', 'medida3', 'campo g', 'g'])
+            col_md4 = encontrar_coluna(['md4', 'medida 4', 'med4', 'medida4'])
+            col_md5 = encontrar_coluna(['md5', 'medida 5', 'med5', 'medida5'])
+            col_md6 = encontrar_coluna(['md6', 'medida 6', 'med6', 'medida6'])
             col_data = encontrar_coluna(['data', 'data fixacao', 'data fixação', 'datafixacao'])
             
             # Validar colunas obrigatórias
             if not col_codigo:
                 raise Exception("Coluna de código não encontrada! Use um nome como 'Código' ou 'Codigo'")
             
-            log_message(f"✅ Mapeamento: Código=col{col_codigo}, Máscara=col{col_mascara}, Data=col{col_data}", "INFO")
+            log_message(
+                f"✅ Mapeamento: Código=col{col_codigo}, Máscara=col{col_mascara}, Data=col{col_data}, "
+                f"QtdFrag=col{col_qtd_frag}, QtdFrag2=col{col_qtd_frag2}, "
+                f"Md1=col{col_md1}, Md2=col{col_md2}, Md3=col{col_md3}, Md4=col{col_md4}, Md5=col{col_md5}, Md6=col{col_md6}",
+                "INFO"
+            )
 
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
                 codigo = sheet.cell(row=row, column=col_codigo).value if col_codigo else None
                 mascara = sheet.cell(row=row, column=col_mascara).value if col_mascara else None
                 responsavel_macro = sheet.cell(row=row, column=col_responsavel).value if col_responsavel else None
-                campo_d = sheet.cell(row=row, column=col_campo_d).value if col_campo_d else None
-                campo_e = sheet.cell(row=row, column=col_campo_e).value if col_campo_e else None
-                campo_f = sheet.cell(row=row, column=col_campo_f).value if col_campo_f else None
-                campo_g = sheet.cell(row=row, column=col_campo_g).value if col_campo_g else None
+                qtd_frag = sheet.cell(row=row, column=col_qtd_frag).value if col_qtd_frag else None
+                md1 = sheet.cell(row=row, column=col_md1).value if col_md1 else None
+                md2 = sheet.cell(row=row, column=col_md2).value if col_md2 else None
+                md3 = sheet.cell(row=row, column=col_md3).value if col_md3 else None
+                qtd_frag2 = sheet.cell(row=row, column=col_qtd_frag2).value if col_qtd_frag2 else None
+                md4 = sheet.cell(row=row, column=col_md4).value if col_md4 else None
+                md5 = sheet.cell(row=row, column=col_md5).value if col_md5 else None
+                md6 = sheet.cell(row=row, column=col_md6).value if col_md6 else None
                 data_col = sheet.cell(row=row, column=col_data).value if col_data else None
 
                 if row == 2 and data_col:
@@ -90,24 +104,33 @@ class MacroGastricaModule(BaseModule):
                     else:
                         mascara = ultima_mascara
 
-                    # Preservar o valor original de campo_d antes de converter
-                    campo_d_original = str(campo_d).strip().lower() if campo_d is not None else ""
-                    
-                    # Regra: se campo_d for 'mult', usar 6
-                    if campo_d is not None and str(campo_d).strip().lower() == 'mult':
-                        campo_d_valor = '6'
+                    # Preservar o valor original de qtd_frag antes de converter
+                    qtd_frag_original = str(qtd_frag).strip().lower() if qtd_frag is not None else ""
+                    # novo campo: preservar original do frasco 2
+                    qtd_frag2_original = str(qtd_frag2).strip().lower() if qtd_frag2 is not None else ""
+
+                    if qtd_frag is not None and str(qtd_frag).strip().lower() == 'mult':
+                        qtd_frag_valor = '6'
                     else:
-                        campo_d_valor = str(campo_d).strip() if campo_d is not None else ""
+                        qtd_frag_valor = str(qtd_frag).strip() if qtd_frag is not None else ""
+
+                    # normalização simples para frasco 2 (sem regra de 'mult' por enquanto)
+                    qtd_frag2_valor = str(qtd_frag2).strip() if qtd_frag2 is not None else ""
 
                     dados.append({
                         'codigo': codigo,
                         'mascara': mascara,
                         'responsavel_macro': responsavel_macro_valor,
-                        'campo_d': campo_d_valor,
-                        'campo_d_original': campo_d_original,  # Preserva se era 'mult'
-                        'campo_e': str(campo_e).strip() if campo_e is not None else "",
-                        'campo_f': str(campo_f).strip() if campo_f is not None else "",
-                        'campo_g': str(campo_g).strip() if campo_g is not None else "",
+                        'qtd_frag': qtd_frag_valor,
+                        'qtd_frag_original': qtd_frag_original,
+                        'md1': str(md1).strip() if md1 is not None else "",
+                        'md2': str(md2).strip() if md2 is not None else "",
+                        'md3': str(md3).strip() if md3 is not None else "",
+                        'qtd_frag2': qtd_frag2_valor,
+                        'qtd_frag2_original': qtd_frag2_original,
+                        'md4': str(md4).strip() if md4 is not None else "",
+                        'md5': str(md5).strip() if md5 is not None else "",
+                        'md6': str(md6).strip() if md6 is not None else "",
                         'data_fixacao': data_fixacao
                     })
             workbook.close()
@@ -387,7 +410,7 @@ class MacroGastricaModule(BaseModule):
         log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "SUCCESS")
         time.sleep(0.5)
 
-    def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g):
+    def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6):
         """Abre o modal de variáveis e preenche os campos baseado na máscara"""
         try:
             # Clicar no botão "Pesquisar variáveis (F7)"
@@ -430,39 +453,47 @@ class MacroGastricaModule(BaseModule):
             
             if mascara_upper in ['VBSEM', 'VBCOM']:
                 # med1, med2, med3 e tamanho da parede (na quantidade de fragmentos)
-                valores = [campo_e, campo_f, campo_g, campo_d]
-                
+                valores = [md1, md2, md3, qtd_frag]
+
             elif mascara_upper == 'APC':
                 # med1 e med2 sem med3
-                valores = [campo_e, campo_f]
-                
+                valores = [md1, md2]
+
             elif mascara_upper == 'COLO':
                 # Ordem correta: quantidade fragmentos, med1, med2, med3, quantidade legenda
-                # Usar campo_d_original para verificar se era 'mult' na planilha
-                if campo_d_original == 'mult':
-                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+                # Usar qtd_frag_original para verificar se era 'mult' na planilha
+                if qtd_frag_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "M"]
                 else:
-                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]
-                    
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag]
+
             elif mascara_upper in ['RTU-FIT', 'RTU-FIP']:
-                # peso (campo_d), med1, med2, med3 - PESO VEM PRIMEIRO!
-                valores = [campo_d, campo_e, campo_f, campo_g]
-                
+                # peso (qtd_frag), med1, med2, med3 - PESO VEM PRIMEIRO!
+                valores = [qtd_frag, md1, md2, md3]
+
             elif mascara_upper in ['HEMO-FIT', 'HEMO-FIP']:
-                # Quantidade, med1, med2, med3 e quantidade na legenda igual a da macro
-                # Usar campo_d_original para verificar se era 'mult' na planilha
-                if campo_d_original == 'mult':
-                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+                if qtd_frag_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "M"]
                 else:
-                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]
-                    
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag]
+
+            elif mascara_upper in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F']:
+                if qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "Múltiplos", md4, md5, md6, "M", "M"]
+                elif qtd_frag_original == 'mult' and not qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, qtd_frag2, md4, md5, md6, "M", qtd_frag2]
+                elif not qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = [qtd_frag, md1, md2, md3, "Múltiplos", md4, md5, md6, qtd_frag, "M"]
+                else:
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag2, md4, md5, md6, qtd_frag, qtd_frag2]
+
             else:
                 # Padrão original (máscaras antigas)
-                # Usar campo_d_original para verificar se era 'mult' na planilha
-                if campo_d_original == 'mult':
-                    valores = ["Múltiplos", campo_e, campo_f, campo_g, "M"]
+                # Usar qtd_frag_original para verificar se era 'mult' na planilha
+                if qtd_frag_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "M"]
                 else:
-                    valores = [campo_d, campo_e, campo_f, campo_g, campo_d]  # Último é campo 334 (mesmo valor de D)
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag]
 
             log_message(f"📋 Preenchendo variáveis para máscara '{mascara}': {valores}", "INFO")
             
@@ -531,13 +562,19 @@ class MacroGastricaModule(BaseModule):
             log_message("⚠️ Nenhuma máscara fornecida para definir grupo", "WARNING")
             return
 
-        mascaras_estomago = ['A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'DUO', 'DUO ', 'ESOFF', 'GASTRICA', 'POLIPO', 'G/POLIPO', 'ULCERA']
+        mascaras_estomago = [
+            'A/C', 'A/I', 'AIC', 'AIF', 'ANTRO', 'COTO', 'DUO', 'DUO ', 'ESOFF',
+            'GASTRICA', 'POLIPO', 'G/POLIPO', 'ULCERA',
+            'A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F'
+        ]
         mascaras_intestino = ['B/COLON', 'ICR', 'P/COLON']
         mascaras_vesicula = ['VBSEM', 'VBCOM']
         mascaras_apendice = ['APC']
         mascaras_prostata = ['RTU-FIT', 'RTU-FIP']
         mascaras_geral = ['HEMO-FIT', 'HEMO-FIP']
         mascaras_utero = ['COLO']
+        # Máscaras mistas estômago/intestino
+        mascaras_estomago_intestino = ['G/PCOLON', 'G/BCOLON']
 
         grupo_selecionado = None
         mascara_upper = mascara.upper()
@@ -556,6 +593,8 @@ class MacroGastricaModule(BaseModule):
             grupo_selecionado = "Geral"
         elif mascara_upper in mascaras_utero:
             grupo_selecionado = "Utero"
+        elif mascara_upper in mascaras_estomago_intestino:
+            grupo_selecionado = "Estomago e intestino"
         else:
             log_message(f"⚠️ Máscara '{mascara}' não encontrada nas regras definidas", "WARNING")
             return
@@ -867,7 +906,7 @@ class MacroGastricaModule(BaseModule):
                 log_message("🔍 Clicou no campo de região para editar", "INFO")
                 time.sleep(0.5)
 
-                # Aguardar o input ficar visível e preencher
+                # Aguardar o input ficar visível e preencher via JavaScript
                 try:
                     # Aguardar o input aparecer
                     wait.until(lambda d: input_regiao.is_displayed() or input_regiao.get_attribute("style") != "display: none;")
@@ -921,7 +960,264 @@ class MacroGastricaModule(BaseModule):
         
         return padroes.get(mascara_upper, (None, 1, False))
     
-    def definir_quantidade_fragmentos(self, driver, wait, mascara, campo_d):
+    # ========================= HELPERS 2 FRASCOS =========================
+    def _buscar_proxima_regiao_vazia(self, driver):
+        """Retorna dict {element, input} da PRÓXIMA região vazia na tabela de fragmentos."""
+        script = """
+        var tbody = document.getElementById('tdRegiao');
+        if (tbody) {
+            var inputs = tbody.querySelectorAll('input[name*="regiao_"]');
+            for (var i = 0; i < inputs.length; i++) {
+                var input = inputs[i];
+                if (!input.value || input.value.trim() === '') {
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        if (ancora && ancora.offsetParent !== null) {
+                            return {element: ancora, input: input};
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+        """
+        return driver.execute_script(script)
+
+    def _buscar_proxima_quantidade_vazia(self, driver):
+        """Retorna dict {element, input} da PRÓXIMA quantidade "livre" na tabela.
+        Prioriza primeiro campos com valor '0' e depois campos vazios.
+        """
+        script = """
+        var tbody = document.getElementById('tdRegiao');
+        if (!tbody) { return null; }
+
+        var candidatosZero = [];
+        var candidatosVazio = [];
+        var inputs = tbody.querySelectorAll('input[name*="quantidade_"]');
+
+        for (var i = 0; i < inputs.length; i++) {
+            var input = inputs[i];
+            var valor = (input.value || '').trim();
+            var parentTd = input.closest('td');
+            if (!parentTd) { continue; }
+            var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+            if (!ancora || ancora.offsetParent === null) { continue; }
+
+            if (valor === '0') {
+                candidatosZero.push({ element: ancora, input: input });
+            } else if (valor === '') {
+                candidatosVazio.push({ element: ancora, input: input });
+            }
+        }
+
+        if (candidatosZero.length > 0) {
+            return candidatosZero[0];
+        }
+        if (candidatosVazio.length > 0) {
+            return candidatosVazio[0];
+        }
+        return null;
+        """
+        return driver.execute_script(script)
+
+    def _buscar_proxima_qtd_blocos_vazia(self, driver):
+        """Retorna dict {element, input} da PRÓXIMA quantidade de blocos vazia na tabela de fragmentos."""
+        script = """
+        var tbody = document.getElementById('tdRegiao');
+        if (tbody) {
+            var inputs = tbody.querySelectorAll('input[name*="quantidadeBlocos_"]');
+            for (var i = 0; i < inputs.length; i++) {
+                var input = inputs[i];
+                if (!input.value || input.value.trim() === '') {
+                    var parentTd = input.closest('td');
+                    if (parentTd) {
+                        var ancora = parentTd.querySelector('a[class*="table-editable-ancora"]');
+                        if (ancora && ancora.offsetParent !== null) {
+                            return {element: ancora, input: input};
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+        """
+        return driver.execute_script(script)
+
+    def _preencher_regiao_linha(self, driver, wait, regiao_valor):
+        """Preenche UMA linha de região com o valor informado, usando o próximo campo vazio."""
+        if not regiao_valor:
+            return
+        resultado = self._buscar_proxima_regiao_vazia(driver)
+        if not resultado:
+            log_message("⚠️ Nenhum campo de região vazio encontrado para preencher", "WARNING")
+            return
+
+        campo_regiao = resultado['element']
+        input_regiao = resultado['input']
+
+        driver.execute_script("arguments[0].click();", campo_regiao)
+        log_message("🔍 Clicou no próximo campo de região vazio", "INFO")
+        time.sleep(0.4)
+
+        try:
+            wait.until(lambda d: input_regiao.is_displayed() or input_regiao.get_attribute("style") != "display: none;")
+            driver.execute_script(
+                """
+                arguments[0].value = '';
+                arguments[0].value = arguments[1];
+                arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """,
+                input_regiao,
+                regiao_valor,
+            )
+            log_message(f"✍️ Região preenchida com '{regiao_valor}'", "SUCCESS")
+            time.sleep(0.3)
+            driver.execute_script("document.body.click();")
+            time.sleep(0.3)
+        except Exception as e:
+            log_message(f"⚠️ Erro ao preencher linha de região: {e}", "WARNING")
+
+    def _preencher_quantidade_linha(self, driver, wait, quantidade_valor):
+        """Preenche UMA linha de quantidade de fragmentos no próximo campo vazio."""
+        if not quantidade_valor:
+            return
+        resultado = self._buscar_proxima_quantidade_vazia(driver)
+        if not resultado:
+            log_message("⚠️ Nenhum campo de quantidade vazio encontrado para preencher", "WARNING")
+            return
+
+        campo_qtd = resultado['element']
+        input_qtd = resultado['input']
+
+        driver.execute_script("arguments[0].click();", campo_qtd)
+        log_message("🔍 Clicou no próximo campo de quantidade vazio", "INFO")
+        time.sleep(0.4)
+
+        try:
+            wait.until(lambda d: input_qtd.is_displayed() or input_qtd.get_attribute("style") != "display: none;")
+            driver.execute_script(
+                """
+                arguments[0].value = '';
+                arguments[0].value = arguments[1];
+                arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """,
+                input_qtd,
+                str(quantidade_valor),
+            )
+            log_message(f"✍️ Quantidade de fragmentos preenchida com '{quantidade_valor}'", "SUCCESS")
+            time.sleep(0.3)
+            driver.execute_script("document.body.click();")
+            time.sleep(0.3)
+        except Exception as e:
+            log_message(f"⚠️ Erro ao preencher linha de quantidade: {e}", "WARNING")
+
+    def _preencher_blocos_linha(self, driver, wait, blocos_valor="1"):
+        """Preenche UMA linha de quantidade de blocos no próximo campo vazio."""
+        if not blocos_valor:
+            return
+        resultado = self._buscar_proxima_qtd_blocos_vazia(driver)
+        if not resultado:
+            log_message("⚠️ Nenhum campo de quantidade de blocos vazio encontrado para preencher", "WARNING")
+            return
+
+        campo_blocos = resultado['element']
+        input_blocos = resultado['input']
+
+        driver.execute_script("arguments[0].click();", campo_blocos)
+        log_message("🔍 Clicou no próximo campo de blocos vazio", "INFO")
+        time.sleep(0.4)
+
+        try:
+            wait.until(lambda d: input_blocos.is_displayed() or input_blocos.get_attribute("style") != "display: none;")
+            driver.execute_script(
+                """
+                arguments[0].value = '';
+                arguments[0].value = arguments[1];
+                arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                """,
+                input_blocos,
+                str(blocos_valor),
+            )
+            log_message(f"✍️ Quantidade de blocos preenchida com '{blocos_valor}'", "SUCCESS")
+            time.sleep(0.3)
+            driver.execute_script("document.body.click();")
+            time.sleep(0.3)
+        except Exception as e:
+            log_message(f"⚠️ Erro ao preencher linha de blocos: {e}", "WARNING")
+
+    # ====================== MÉTODOS 2 FRASCOS ==========================
+    def definir_regiao_2frascos(self, driver, wait, mascara):
+        """Define as regiões para máscaras de 2 frascos (preenche 2 linhas na tabela)."""
+        if not mascara:
+            log_message("⚠️ Nenhuma máscara fornecida para definir região (2 frascos)", "WARNING")
+            return
+
+        mascara_upper = mascara.upper()
+        mapa_regioes = {
+            'A/C2F': ("AN: Antro", "CP: Corpo"),
+            'A/I2F': ("AN: Antro", "INC: Incisura"),
+            'A/P2F': ("AN: Antro", "POLG: Pólipo gástrico"),
+            'G/E2F': ("GA: Gastrica", "Esofago: Esôfago"),
+            'G/P2F': ("GA: Gastrica", "POLG: Pólipo gástrico"),
+        }
+
+        regioes = mapa_regioes.get(mascara_upper)
+        if not regioes:
+            log_message(f"⚠️ Máscara '{mascara}' não está mapeada para 2 frascos", "WARNING")
+            return
+
+        regiao1, regiao2 = regioes
+        log_message(f"📝 Definindo regiões 2 frascos: Frasco1='{regiao1}', Frasco2='{regiao2}'", "INFO")
+
+        self._preencher_regiao_linha(driver, wait, regiao1)
+        self._preencher_regiao_linha(driver, wait, regiao2)
+
+    def definir_quantidade_fragmentos_2frascos(self, driver, wait, mascara, qtd_frag, qtd_frag2):
+        """Define quantidade de fragmentos para máscaras de 2 frascos (linha 1 e 2)."""
+        mascara_upper = mascara.upper() if mascara else ""
+
+        # Padrão para o frasco 1 reaproveitando a regra existente
+        frag_padrao, _, usar_sempre_padrao = self.obter_padrao_fragmentos_blocos(mascara_upper)
+
+        # Frasco 1
+        if usar_sempre_padrao and frag_padrao:
+            qtd1 = str(frag_padrao)
+            log_message(f"📝 [2F] Frasco 1 usando padrão FIXO de {frag_padrao} fragmentos para '{mascara_upper}'", "INFO")
+        elif qtd_frag and str(qtd_frag).strip():
+            qtd1 = str(qtd_frag).strip()
+            log_message(f"📝 [2F] Frasco 1 usando quantidade da planilha: {qtd1}", "INFO")
+        elif frag_padrao:
+            qtd1 = str(frag_padrao)
+            log_message(f"📝 [2F] Frasco 1 sem valor na planilha, usando padrão {qtd1}", "INFO")
+        else:
+            qtd1 = ""
+            log_message("⚠️ [2F] Frasco 1 sem quantidade definida e sem padrão", "WARNING")
+
+        # Frasco 2 – para essas máscaras, sempre virá da planilha (sem padrão específico por enquanto)
+        if qtd_frag2 and str(qtd_frag2).strip():
+            qtd2 = str(qtd_frag2).strip()
+            log_message(f"📝 [2F] Frasco 2 usando quantidade da planilha: {qtd2}", "INFO")
+        else:
+            qtd2 = ""
+            log_message("⚠️ [2F] Frasco 2 sem quantidade na planilha (mantendo vazio)", "WARNING")
+
+        if qtd1:
+            self._preencher_quantidade_linha(driver, wait, qtd1)
+        if qtd2:
+            self._preencher_quantidade_linha(driver, wait, qtd2)
+
+    def definir_quantidade_blocos_2frascos(self, driver, wait):
+        """Define quantidade de blocos para máscaras de 2 frascos (1 bloco em cada frasco)."""
+        log_message("📝 [2F] Definindo quantidade de blocos: 1 para cada frasco", "INFO")
+        self._preencher_blocos_linha(driver, wait, "1")
+        self._preencher_blocos_linha(driver, wait, "1")
+
+    # ====================== MÉTODOS 1 FRASCO ============================
+    def definir_quantidade_fragmentos(self, driver, wait, mascara, qtd_frag):
         """Define a quantidade de fragmentos usando JavaScript melhorado"""
         try:
             # Obter padrão da máscara
@@ -932,16 +1228,16 @@ class MacroGastricaModule(BaseModule):
                 # Para RTU, VBSEM, VBCOM, APC: SEMPRE usar o padrão, ignorar planilha
                 quantidade_valor = str(fragmentos_padrao)
                 log_message(f"📝 Usando padrão FIXO de {fragmentos_padrao} fragmentos para '{mascara}' (ignora planilha)", "INFO")
-            elif campo_d and campo_d.strip():
+            elif qtd_frag and qtd_frag.strip():
                 # Para outras máscaras: usar valor da planilha se existir
-                quantidade_valor = campo_d.strip()
+                quantidade_valor = qtd_frag.strip()
                 log_message(f"📝 Usando quantidade da planilha: {quantidade_valor}", "INFO")
             elif fragmentos_padrao:
                 # Fallback: usar padrão se planilha estiver vazia
                 quantidade_valor = str(fragmentos_padrao)
-                log_message(f"📝 Campo D vazio, usando padrão de {fragmentos_padrao} fragmentos para '{mascara}'", "INFO")
+                log_message(f"📝 Campo qtd_frag vazio, usando padrão de {fragmentos_padrao} fragmentos para '{mascara}'", "INFO")
             else:
-                log_message("⚠️ Campo D está vazio e não há padrão, não definindo quantidade", "WARNING")
+                log_message("⚠️ qtd_frag está vazio e não há padrão, não definindo quantidade", "WARNING")
                 return
 
             log_message(f"✅ Definindo quantidade de fragmentos como: {quantidade_valor}", "INFO")
@@ -965,6 +1261,7 @@ class MacroGastricaModule(BaseModule):
             }
             return null;
             """
+
             resultado_quantidade = driver.execute_script(script)
             
             if resultado_quantidade:
@@ -982,7 +1279,7 @@ class MacroGastricaModule(BaseModule):
                 log_message("🔍 Clicou no campo de quantidade para editar", "INFO")
                 time.sleep(0.5)
 
-                # Aguardar o input ficar visível e preencher
+                # Aguardar o input ficar visível e preencher via JavaScript
                 try:
                     # Aguardar o input aparecer
                     wait.until(lambda d: input_quantidade.is_displayed() or input_quantidade.get_attribute("style") != "display: none;")
@@ -1015,7 +1312,7 @@ class MacroGastricaModule(BaseModule):
                 log_message("⚠️ Campo de quantidade não encontrado ou não visível", "WARNING")
 
         except Exception as e:
-            log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
+            log_message(f"⚠️ Erro ao definir quantidade de fragmentos: {e}", "WARNING")
 
     def definir_quantidade_blocos(self, driver, wait):
         """Define a quantidade de blocos usando JavaScript melhorado"""
@@ -1058,7 +1355,7 @@ class MacroGastricaModule(BaseModule):
                 log_message("🔍 Clicou no campo de quantidade de blocos para editar", "INFO")
                 time.sleep(0.5)
 
-                # Aguardar o input ficar visível e preencher
+                # Aguardar o input ficar visível e preencher via JavaScript
                 try:
                     # Aguardar o input aparecer
                     wait.until(lambda d: input_blocos.is_displayed() or input_blocos.get_attribute("style") != "display: none;")
@@ -1204,7 +1501,7 @@ class MacroGastricaModule(BaseModule):
             log_message(f"❌ Não foi possível encontrar o botão Salvar fragmentos: {e}", "ERROR")
             raise
 
-    def preencher_campos_pre_envio(self, driver, wait, mascara, campo_d):
+    def preencher_campos_pre_envio(self, driver, wait, mascara, qtd_frag, qtd_frag2):
         """Preenche todos os campos necessários antes de enviar para próxima etapa"""
         try:
             log_message("📝 Iniciando preenchimento dos campos pré-envio...", "INFO")
@@ -1274,27 +1571,57 @@ class MacroGastricaModule(BaseModule):
                 self.aguardar_pagina_estavel(driver, wait, timeout=3)
             except Exception as e:
                 log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
-            
-            # 3. Definir região como "GA: Gastrica"
-            try:
-                self.definir_regiao_gastrica(driver, wait, mascara)
-                self.aguardar_pagina_estavel(driver, wait, timeout=3)
-            except Exception as e:
-                log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
 
-            # 4. Definir quantidade de fragmentos (campo D)
-            try:
-                self.definir_quantidade_fragmentos(driver, wait, mascara, campo_d)
-                self.aguardar_pagina_estavel(driver, wait, timeout=3)
-            except Exception as e:
-                log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
-            
-            # 5. Definir quantidade de blocos como "1"
-            try:
-                self.definir_quantidade_blocos(driver, wait)
-                self.aguardar_pagina_estavel(driver, wait, timeout=3)
-            except Exception as e:
-                log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
+            if mascara and mascara.upper() in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F']:
+                log_message("📝 Máscara de 2 frascos detectada ", "INFO")
+
+                log_message("⌨️ Executando ALT + M para adicionar nova linha", "INFO")
+                try:
+                    actions = ActionChains(driver)
+                    actions.key_down(Keys.ALT).send_keys('m').key_up(Keys.ALT).perform()
+                    log_message("✅ Atalho ALT + M executado", "SUCCESS")
+                    time.sleep(0.5)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao executar ALT + M: {e}", "WARNING")
+
+                try:
+                    self.definir_regiao_2frascos(driver, wait, mascara)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir região (2 frascos): {e}", "WARNING")
+
+                try:
+                    self.definir_quantidade_fragmentos_2frascos(driver, wait, mascara, qtd_frag, qtd_frag2)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir quantidade (2 frascos): {e}", "WARNING")
+
+                try:
+                    self.definir_quantidade_blocos_2frascos(driver, wait)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir quantidade de blocos (2 frascos): {e}", "WARNING")
+
+            else:
+                log_message("📝 Máscara de 1 frasco detectada ", "INFO")
+                try:
+                    self.definir_regiao_gastrica(driver, wait, mascara)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir região: {e}", "WARNING")
+
+                try:
+                    self.definir_quantidade_fragmentos(driver, wait, mascara, qtd_frag)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir quantidade: {e}", "WARNING")
+
+                try:
+                    self.definir_quantidade_blocos(driver, wait)
+                    self.aguardar_pagina_estavel(driver, wait, timeout=3)
+                except Exception as e:
+                    log_message(f"⚠️ Erro ao definir quantidade de blocos: {e}", "WARNING")
             
             # 6. Verificar descrição auxiliar (opcional)
             try:
@@ -1508,11 +1835,16 @@ class MacroGastricaModule(BaseModule):
                 
                 codigo = exame_data['codigo']
                 mascara = exame_data['mascara']
-                campo_d = exame_data['campo_d']
-                campo_d_original = exame_data['campo_d_original']
-                campo_e = exame_data['campo_e']
-                campo_f = exame_data['campo_f']
-                campo_g = exame_data['campo_g']
+                qtd_frag = exame_data['qtd_frag']
+                qtd_frag_original = exame_data['qtd_frag_original']
+                md1 = exame_data['md1']
+                md2 = exame_data['md2']
+                md3 = exame_data['md3']
+                qtd_frag2 = exame_data['qtd_frag2']
+                qtd_frag2_original = exame_data['qtd_frag2_original']
+                md4 = exame_data['md4']
+                md5 = exame_data['md5']
+                md6 = exame_data['md6']
                 responsavel_macro = exame_data['responsavel_macro']
                 data_fixacao = exame_data['data_fixacao']
 
@@ -1569,14 +1901,26 @@ class MacroGastricaModule(BaseModule):
                         log_message("✅ Browser recriado e login realizado novamente", "SUCCESS")
                     
                     # Processar este exame específico
-                    resultado = self.processar_exame(driver, wait, codigo, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+                    resultado = self.processar_exame(
+                        driver, wait,
+                        codigo, mascara,
+                        qtd_frag, qtd_frag_original,
+                        md1, md2, md3,
+                        qtd_frag2, qtd_frag2_original,
+                        md4, md5, md6,
+                        responsavel_macro, data_fixacao
+                    )
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
-                        'campo_d': campo_d,
-                        'campo_e': campo_e,
-                        'campo_f': campo_f,
-                        'campo_g': campo_g,
+                        'qtd_frag': qtd_frag,
+                        'md1': md1,
+                        'md2': md2,
+                        'md3': md3,
+                        'qtd_frag2': qtd_frag2,
+                        'md4': md4,
+                        'md5': md5,
+                        'md6': md6,
                         'status': resultado['status'],
                         'detalhes': resultado.get('detalhes', '')
                     })
@@ -1586,10 +1930,14 @@ class MacroGastricaModule(BaseModule):
                     resultados.append({
                         'codigo': codigo,
                         'mascara': mascara,
-                        'campo_d': campo_d,
-                        'campo_e': campo_e,
-                        'campo_f': campo_f,
-                        'campo_g': campo_g,
+                        'qtd_frag': qtd_frag,
+                        'md1': md1,
+                        'md2': md2,
+                        'md3': md3,
+                        'qtd_frag2': qtd_frag2,
+                        'md4': md4,
+                        'md5': md5,
+                        'md6': md6,
                         'status': 'erro',
                         'detalhes': str(e)
                     })
@@ -1608,7 +1956,7 @@ class MacroGastricaModule(BaseModule):
                 except Exception as quit_error:
                     log_message(f"Erro ao fechar browser: {quit_error}", "WARNING")
 
-    def processar_exame(self, driver, wait, codigo, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def processar_exame(self, driver, wait, codigo, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6, responsavel_macro, data_fixacao):
         """Processa um exame individual"""
         try:
             # Verificar se a sessão do browser ainda está ativa
@@ -1638,7 +1986,15 @@ class MacroGastricaModule(BaseModule):
                 raise
 
             # Aguardar div de andamento aparecer
-            return self.aguardar_e_processar_andamento(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+            return self.aguardar_e_processar_andamento(
+                driver, wait,
+                mascara,
+                qtd_frag, qtd_frag_original,
+                md1, md2, md3,
+                qtd_frag2, qtd_frag2_original,
+                md4, md5, md6,
+                responsavel_macro, data_fixacao
+            )
 
         except Exception as e:
             error_message = str(e)
@@ -1658,7 +2014,7 @@ class MacroGastricaModule(BaseModule):
                 pass
             return {'status': 'erro', 'detalhes': error_message}
 
-    def aguardar_e_processar_andamento(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def aguardar_e_processar_andamento(self, driver, wait, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6, responsavel_macro, data_fixacao):
         """Aguarda a div de andamento e processa o exame"""
         # Aguardar div de andamento aparecer (otimizado)
         try:
@@ -1671,9 +2027,17 @@ class MacroGastricaModule(BaseModule):
         
         # Processar conclusão diretamente sem verificar SVG
         log_message("✅ Exame carregado - iniciando processo de conclusão", "SUCCESS")
-        return self.processar_conclusao_completa(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao)
+        return self.processar_conclusao_completa(
+            driver, wait,
+            mascara,
+            qtd_frag, qtd_frag_original,
+            md1, md2, md3,
+            qtd_frag2, qtd_frag2_original,
+            md4, md5, md6,
+            responsavel_macro, data_fixacao
+        )
 
-    def processar_conclusao_completa(self, driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g, responsavel_macro, data_fixacao):
+    def processar_conclusao_completa(self, driver, wait, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6, responsavel_macro, data_fixacao):
         try:
             # 1. Selecionar responsável pela macroscopia
             self.selecionar_responsavel_macroscopia(driver, wait, responsavel_macro)
@@ -1695,7 +2059,14 @@ class MacroGastricaModule(BaseModule):
             
             # 6. Abrir modal de variáveis e preencher campos (opcional)
             try:
-                self.abrir_modal_variaveis_e_preencher(driver, wait, mascara, campo_d, campo_d_original, campo_e, campo_f, campo_g)
+                self.abrir_modal_variaveis_e_preencher(
+                    driver, wait,
+                    mascara,
+                    qtd_frag, qtd_frag_original,
+                    md1, md2, md3,
+                    qtd_frag2, qtd_frag2_original,
+                    md4, md5, md6
+                )
             except Exception as var_error:
                 log_message(f"⚠️ Erro no modal de variáveis: {var_error}", "WARNING")
                 log_message("⚠️ Continuando o processo sem as variáveis", "WARNING")
@@ -1704,8 +2075,8 @@ class MacroGastricaModule(BaseModule):
             self.salvar_macroscopia(driver, wait)
             
             # 8. Preencher campos necessários antes de enviar para próxima etapa
-            self.preencher_campos_pre_envio(driver, wait, mascara, campo_d)
-            
+            self.preencher_campos_pre_envio(driver, wait, mascara, qtd_frag, qtd_frag2)
+
             # 9. Salvar fragmentos
             self.salvar_fragmentos(driver, wait)
             
