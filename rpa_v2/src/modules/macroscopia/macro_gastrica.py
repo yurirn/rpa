@@ -1964,26 +1964,127 @@ class MacroGastricaModule(BaseModule):
                 raise Exception("Sessão do browser perdida - necessário reiniciar")
             
             # Aguardar e encontrar o campo de código de barras diretamente pelo placeholder (mais confiável)
-            try:
-                campo_codigo = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Leitor de código de barras']")))
-                log_message("✅ Campo de código encontrado", "INFO")
-            except:
-                # Fallback para ID se placeholder não funcionar
-                campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
-                log_message("✅ Campo de código encontrado pelo ID", "INFO")
+            def localizar_campo_codigo():
+                try:
+                    return wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Leitor de código de barras']")))
+                except:
+                    return wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
 
-            campo_codigo.clear()
-            campo_codigo.send_keys(codigo)
-            log_message(f"✍️ Código '{codigo}' digitado no campo", "SUCCESS")
+            campo_codigo = localizar_campo_codigo()
+            log_message("✅ Campo de código encontrado", "INFO")
 
-            # Clicar no botão de pesquisar (consultarExameBarraAbrirPorBarCode)
-            try:
-                botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "consultarExameBarraAbrirPorBarCode")))
-                botao_pesquisar.click()
-                log_message("🔍 Clicou no botão de pesquisar exame", "SUCCESS")
-            except Exception as e:
-                log_message(f"⚠️ Não foi possível clicar no botão de pesquisar: {e}", "WARNING")
-                raise
+            # Preencher o campo de código de forma robusta (tratando stale element, foco, etc.)
+            tentativas_campo = 0
+            max_tentativas_campo = 3
+            ultimo_erro_campo = None
+            while tentativas_campo < max_tentativas_campo:
+                try:
+                    tentativas_campo += 1
+                    log_message(f"✍️ Tentativa {tentativas_campo} de preencher campo de código com '{codigo}'", "INFO")
+
+                    # Garantir que o campo está visível na tela
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", campo_codigo)
+                        time.sleep(0.2)
+                    except Exception as e_scroll:
+                        log_message(f"⚠️ Erro ao fazer scroll até o campo de código: {e_scroll}", "WARNING")
+
+                    # Tentar clicar/focar no campo
+                    try:
+                        campo_codigo.click()
+                    except Exception as e_click:
+                        log_message(f"⚠️ Erro ao clicar no campo de código: {e_click}", "WARNING")
+
+                    # Limpar e digitar
+                    campo_codigo.clear()
+                    campo_codigo.send_keys(Keys.CONTROL, 'a')
+                    campo_codigo.send_keys(Keys.DELETE)
+                    campo_codigo.send_keys(str(codigo))
+                    log_message(f"✍️ Código '{codigo}' digitado no campo", "SUCCESS")
+                    break
+
+                except Exception as e_preencher:
+                    ultimo_erro_campo = e_preencher
+                    msg = str(e_preencher)
+                    log_message(f"⚠️ Erro ao preencher campo de código: {msg}", "WARNING")
+
+                    # Se for stale element, relocalizar o campo e tentar novamente
+                    if "stale element reference" in msg.lower():
+                        log_message("🔄 Campo de código ficou stale, relocalizando...", "WARNING")
+                        try:
+                            campo_codigo = localizar_campo_codigo()
+                            log_message("✅ Campo de código relocalizado após stale", "INFO")
+                        except Exception as e_reloc:
+                            ultimo_erro_campo = e_reloc
+                            log_message(f"❌ Não foi possível relocalizar o campo de código: {e_reloc}", "ERROR")
+                            time.sleep(0.5)
+                    else:
+                        time.sleep(0.5)
+
+            if tentativas_campo >= max_tentativas_campo and ultimo_erro_campo is not None:
+                raise Exception(f"Não foi possível preencher o campo de código após {max_tentativas_campo} tentativas: {ultimo_erro_campo}")
+
+            # Clicar no botão de pesquisar (consultarExameBarraAbrirPorBarCode) de forma robusta
+            tentativa = 0
+            max_tentativas = 3
+            ultimo_erro = None
+            while tentativa < max_tentativas:
+                try:
+                    tentativa += 1
+                    log_message(f"🔍 Tentativa {tentativa} de clicar no botão de pesquisar exame", "INFO")
+                    botao_pesquisar = wait.until(
+                        EC.presence_of_element_located((By.ID, "consultarExameBarraAbrirPorBarCode"))
+                    )
+
+                    # Garantir que o botão esteja visível na tela
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_pesquisar)
+                        time.sleep(0.3)
+                    except Exception as e_scroll:
+                        log_message(f"⚠️ Erro ao fazer scroll até o botão de pesquisar: {e_scroll}", "WARNING")
+
+                    # Tentar clique direto
+                    try:
+                        botao_pesquisar.click()
+                        log_message("🔍 Clicou no botão de pesquisar exame (clique direto)", "SUCCESS")
+                        break
+                    except Exception as e_click:
+                        ultimo_erro = e_click
+                        msg = str(e_click)
+                        log_message(f"⚠️ Erro no clique direto no botão de pesquisar: {msg}", "WARNING")
+
+                        # Se for element not interactable, tentar alternativas
+                        if "element not interactable" in msg.lower() or "stale element reference" in msg.lower():
+                            try:
+                                # Tentar esperar até que esteja clicável
+                                botao_pesquisar = wait.until(
+                                    EC.element_to_be_clickable((By.ID, "consultarExameBarraAbrirPorBarCode"))
+                                )
+                                botao_pesquisar.click()
+                                log_message("✅ Clicou no botão de pesquisar exame após ficar clicável", "SUCCESS")
+                                break
+                            except Exception as e_click2:
+                                ultimo_erro = e_click2
+                                log_message(f"⚠️ Segundo erro ao clicar no botão de pesquisar: {e_click2}", "WARNING")
+
+                            # Tentar clique via JavaScript como fallback
+                            try:
+                                driver.execute_script("arguments[0].click();", botao_pesquisar)
+                                log_message("✅ Clicou no botão de pesquisar exame via JavaScript", "SUCCESS")
+                                break
+                            except Exception as e_js:
+                                ultimo_erro = e_js
+                                log_message(f"⚠️ Erro no clique via JavaScript no botão de pesquisar: {e_js}", "WARNING")
+
+                        # Pequena espera antes de nova tentativa
+                        time.sleep(0.5)
+                except Exception as e_local:
+                    ultimo_erro = e_local
+                    log_message(f"⚠️ Erro ao localizar/clicar no botão de pesquisar: {e_local}", "WARNING")
+                    time.sleep(0.5)
+
+            if tentativa >= max_tentativas and ultimo_erro is not None:
+                raise Exception(f"Não foi possível clicar no botão de pesquisar exame após {max_tentativas} tentativas: {ultimo_erro}")
 
             # Aguardar div de andamento aparecer
             return self.aguardar_e_processar_andamento(
@@ -2018,11 +2119,13 @@ class MacroGastricaModule(BaseModule):
         """Aguarda a div de andamento e processa o exame"""
         # Aguardar div de andamento aparecer (otimizado)
         try:
-            wait.until(EC.presence_of_element_located((By.ID, "divAndamentoExame")))
+            # aumentar timeout para até 60 segundos, pois em raros casos a tela demora mais
+            wait_longo = WebDriverWait(driver, 60)
+            wait_longo.until(EC.presence_of_element_located((By.ID, "divAndamentoExame")))
             log_message("📋 Div de andamento do exame encontrada!", "SUCCESS")
             time.sleep(0.5)  # Reduzido de 2 para 0.5
         except:
-            log_message("⚠️ Div de andamento não apareceu no tempo esperado", "WARNING")
+            log_message("⚠️ Div de andamento não apareceu no tempo esperado (60s)", "WARNING")
             return {'status': 'sem_andamento', 'detalhes': 'Exame não encontrado ou não carregou'}
         
         # Processar conclusão diretamente sem verificar SVG
