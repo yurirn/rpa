@@ -268,7 +268,7 @@ class MacroSeptModule(BaseModule):
             'VITORIA': 'Vitoria Aquino Nairne Domingues',
             'ANNAI': 'Annai Lukã Vitorino Losnak',
             'ANA': 'Ana Carolina Viecele Campos',
-            'PAOLA': 'Paola Galdino Souza'
+            'PAOLA': 'Paola Galdino Sousa'
         }
         nome_completo = responsavel_macro_mapper.get(responsavel_macro, responsavel_macro)
         select2_container = wait.until(
