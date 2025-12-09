@@ -110,6 +110,24 @@ class PreparacaoLoteModule(BaseModule):
         ))).click()
         time.sleep(1)
 
+    def fechar_modais_interferentes(self, driver):
+        """
+        Fecha/remover modais/backdrops que bloqueiam cliques.
+        """
+        try:
+            driver.execute_script("""
+                const modais = document.querySelectorAll('.modal.in, .modal.show');
+                modais.forEach(m => {
+                    m.style.display = 'none';
+                    m.classList.remove('in', 'show');
+                });
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            """)
+            time.sleep(0.5)
+            log_message("Modais/backdrops fechados para liberar a tela.", "INFO")
+        except Exception as e:
+            log_message(f"Não foi possível fechar modais: {e}", "WARNING")
+
     def process_single_exam(self, driver, wait, exame, modo_busca):
         """
         Processa um único exame na preparação
@@ -126,6 +144,9 @@ class PreparacaoLoteModule(BaseModule):
             campo_exame = wait.until(EC.presence_of_element_located((By.ID, campo_id)))
             campo_exame.clear()
             campo_exame.send_keys(exame)
+
+            # Garantir que nenhum modal/backdrop esteja bloqueando o clique
+            self.fechar_modais_interferentes(driver)
             wait.until(EC.element_to_be_clickable((By.ID, "pesquisaFaturamento"))).click()
 
             # Aguardar modal de carregamento

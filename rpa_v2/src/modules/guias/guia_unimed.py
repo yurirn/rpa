@@ -241,8 +241,15 @@ class GuiaUnimedModule(BaseModule):
                     
                     # Processar primeira linha para obter dados básicos
                     try:
-                        # Obter número do cartão do paciente da tabela
+                        # Inicializar variáveis
                         cartao = ""
+                        medico = ""
+                        crm = ""
+                        texto = ""
+                        procedimentos_str = ""
+                        quantidades_str = ""
+                        
+                        # Obter número do cartão do paciente da tabela
                         try:
                             # Índice pode variar dependendo da estrutura da tabela
                             # Tentar diferentes índices para o cartão
@@ -267,78 +274,6 @@ class GuiaUnimedModule(BaseModule):
                             log_message(f"✅ Número do cartão obtido: {cartao}", "INFO")
                         except Exception as e:
                             log_message(f"⚠️ Erro ao obter número do cartão: {e}", "WARNING")
-                        
-                        # Obter procedimentos e quantidades de todas as linhas
-                        procedimentos = []
-                        quantidades = []
-                        for row in tbody_rows:
-                            try:
-                                # Tentar diferentes índices para o procedimento
-                                try:
-                                    procedimento = row.find_elements(By.CSS_SELECTOR, "td")[10].text.strip()
-                                except:
-                                    # Tentar localizar pela coluna "Procedimento"
-                                    header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
-                                    proc_index = -1
-                                    for i, cell in enumerate(header_cells):
-                                        if "procedimento" in cell.text.lower():
-                                            proc_index = i
-                                            break
-                                    
-                                    if proc_index >= 0:
-                                        procedimento = row.find_elements(By.CSS_SELECTOR, "td")[proc_index].text.strip()
-                                    else:
-                                        # Se ainda falhar, usar um índice alternativo
-                                        procedimento = row.find_elements(By.CSS_SELECTOR, "td")[9].text.strip()
-                                
-                                procedimentos.append(procedimento)
-                                
-                                # Obter quantidade do procedimento (próxima coluna após procedimento)
-                                try:
-                                    # Se procedimento está no índice 10, quantidade está no índice 11
-                                    cells = row.find_elements(By.CSS_SELECTOR, "td")
-                                    # Encontrar o índice do procedimento primeiro
-                                    proc_index = 10  # índice padrão do procedimento
-                                    try:
-                                        # Tentar encontrar índice do procedimento dinamicamente
-                                        header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
-                                        for i, cell in enumerate(header_cells):
-                                            if "procedimento" in cell.text.lower():
-                                                proc_index = i
-                                                break
-                                    except:
-                                        pass
-                                    
-                                    # QTD é a próxima coluna após procedimento
-                                    qtd_index = proc_index + 1
-                                    quantidade = cells[qtd_index].text.strip()
-                                except:
-                                    # Fallback: tentar localizar pela coluna "Qtd" diretamente
-                                    try:
-                                        header_cells = driver.find_elements(By.CSS_SELECTOR, "table th")
-                                        qtd_index = -1
-                                        for i, cell in enumerate(header_cells):
-                                            if "qtd" in cell.text.lower():
-                                                qtd_index = i
-                                                break
-                                        
-                                        if qtd_index >= 0:
-                                            quantidade = row.find_elements(By.CSS_SELECTOR, "td")[qtd_index].text.strip()
-                                        else:
-                                            quantidade = "1"  # Default para 1 se não encontrar
-                                    except:
-                                        quantidade = "1"  # Default para 1 se não encontrar
-                                
-                                quantidades.append(quantidade)
-                                
-                            except Exception as e:
-                                log_message(f"⚠️ Erro ao obter procedimento/quantidade: {e}", "WARNING")
-                                quantidades.append("1")  # Default para 1 em caso de erro
-                        
-                        procedimentos_str = ", ".join(procedimentos)
-                        quantidades_str = ", ".join(quantidades)
-                        log_message(f"✅ Procedimentos obtidos: {procedimentos_str}", "INFO")
-                        log_message(f"✅ Quantidades obtidas: {quantidades_str}", "INFO")
                         
                         # NOVO FLUXO: Marcar checkbox do primeiro exame e clicar no botão "Abrir exame"
                         log_message("Marcando checkbox do primeiro exame...", "INFO")
@@ -395,8 +330,6 @@ class GuiaUnimedModule(BaseModule):
                             raise Exception(f"Não foi possível marcar o exame: {e}")
                         
                         # Extrair nome do médico e CRM do modal aberto
-                        medico = ""
-                        crm = ""
                         try:
                             # Método 1: Usar JavaScript para extrair o valor do input (mais confiável)
                             try:
@@ -592,6 +525,120 @@ class GuiaUnimedModule(BaseModule):
                                 log_message("⚠️ Não foi possível encontrar o CRM", "WARNING")
                         except Exception as e:
                             log_message(f"⚠️ Erro ao obter médico requisitante: {e}", "WARNING")
+                        
+                        # Extrair procedimentos e quantidades do modal
+                        procedimentos = []
+                        quantidades = []
+                        try:
+                            log_message("Extraindo procedimentos do modal...", "INFO")
+                            
+                            # Aguardar a div de procedimentos estar presente no modal
+                            wait.until(EC.presence_of_element_located((By.ID, "divProcedimentos")))
+                            
+                            # Encontrar todas as linhas de procedimentos na tabela
+                            # Seleciona todas as linhas tr que têm id começando com "procedimento_" mas não "novosProcedimentos"
+                            procedimento_rows = driver.find_elements(By.CSS_SELECTOR, "#divProcedimentos table tbody tr[id^='procedimento_']:not(#novosProcedimentos)")
+                            
+                            if not procedimento_rows:
+                                # Tentar método alternativo sem o filtro :not
+                                procedimento_rows = driver.find_elements(By.CSS_SELECTOR, "#divProcedimentos table tbody tr[id^='procedimento_']")
+                                # Remover a linha "novosProcedimentos" se estiver presente
+                                procedimento_rows = [row for row in procedimento_rows if row.get_attribute("id") != "novosProcedimentos"]
+                            
+                            if not procedimento_rows:
+                                log_message("⚠️ Nenhuma linha de procedimento encontrada, tentando método alternativo...", "WARNING")
+                                # Método alternativo: buscar todas as linhas da tabela exceto cabeçalho
+                                procedimento_rows = driver.find_elements(By.CSS_SELECTOR, "#divProcedimentos table tbody tr")
+                                # Filtrar apenas as que têm checkbox de procedimento
+                                procedimento_rows = [row for row in procedimento_rows if row.find_elements(By.CSS_SELECTOR, "input[type='checkbox'][name='procedimentoExameId']")]
+                            
+                            log_message(f"✅ Encontradas {len(procedimento_rows)} linhas de procedimentos", "SUCCESS")
+                            
+                            for row in procedimento_rows:
+                                try:
+                                    # Extrair código do procedimento (apenas a parte antes do " -")
+                                    # O nome está em um link <a> com classe "table-editable-ancora autocomplete autocompleteSetup" na coluna "Nome"
+                                    procedimento_codigo = ""
+                                    try:
+                                        # Tentar encontrar o link com o nome do procedimento
+                                        procedimento_link = row.find_element(By.CSS_SELECTOR, "td:nth-child(3) a.table-editable-ancora.autocomplete.autocompleteSetup")
+                                        procedimento_texto = procedimento_link.text.strip()
+                                        
+                                        # Se não encontrar, tentar alternativa
+                                        if not procedimento_texto or procedimento_texto == "Vazio":
+                                            # Tentar pelo input oculto
+                                            procedimento_input = row.find_element(By.CSS_SELECTOR, "td:nth-child(3) input.autocomplete")
+                                            procedimento_texto = procedimento_input.get_attribute("value").strip()
+                                        
+                                        # Extrair apenas o código (parte antes do " -")
+                                        if procedimento_texto and " -" in procedimento_texto:
+                                            procedimento_codigo = procedimento_texto.split(" -")[0].strip()
+                                        elif procedimento_texto:
+                                            # Se não tiver " -", usar o texto inteiro (caso seja só o código)
+                                            procedimento_codigo = procedimento_texto.strip()
+                                        
+                                    except Exception as e:
+                                        log_message(f"⚠️ Erro ao extrair código do procedimento: {e}", "WARNING")
+                                        # Tentar método alternativo: pegar texto direto da célula
+                                        try:
+                                            cells = row.find_elements(By.CSS_SELECTOR, "td")
+                                            if len(cells) >= 3:
+                                                procedimento_texto = cells[2].text.strip()
+                                                # Extrair apenas o código (parte antes do " -")
+                                                if procedimento_texto and " -" in procedimento_texto:
+                                                    procedimento_codigo = procedimento_texto.split(" -")[0].strip()
+                                                elif procedimento_texto:
+                                                    procedimento_codigo = procedimento_texto.strip()
+                                        except:
+                                            procedimento_codigo = ""
+                                    
+                                    # Extrair quantidade
+                                    try:
+                                        # A quantidade está na segunda coluna (índice 1)
+                                        quantidade_link = row.find_element(By.CSS_SELECTOR, "td:nth-child(2) a.table-editable-ancora")
+                                        quantidade = quantidade_link.text.strip()
+                                        
+                                        # Se não encontrar, tentar pelo input
+                                        if not quantidade or quantidade == "":
+                                            quantidade_input = row.find_element(By.CSS_SELECTOR, "td:nth-child(2) input[type='number']")
+                                            quantidade = quantidade_input.get_attribute("value").strip()
+                                        
+                                    except Exception as e:
+                                        log_message(f"⚠️ Erro ao extrair quantidade: {e}", "WARNING")
+                                        # Tentar método alternativo
+                                        try:
+                                            cells = row.find_elements(By.CSS_SELECTOR, "td")
+                                            if len(cells) >= 2:
+                                                quantidade = cells[1].text.strip()
+                                            else:
+                                                quantidade = "1"
+                                        except:
+                                            quantidade = "1"
+                                    
+                                    # Só adicionar se o código do procedimento não for vazio
+                                    if procedimento_codigo and procedimento_codigo != "Vazio" and procedimento_codigo != "":
+                                        procedimentos.append(procedimento_codigo)
+                                        quantidades.append(quantidade if quantidade else "1")
+                                        log_message(f"✅ Procedimento encontrado: {procedimento_codigo} - Qtd: {quantidade}", "INFO")
+                                    
+                                except Exception as e:
+                                    log_message(f"⚠️ Erro ao processar linha de procedimento: {e}", "WARNING")
+                                    continue
+                            
+                            # Formatar strings finais
+                            procedimentos_str = ", ".join(procedimentos) if procedimentos else ""
+                            quantidades_str = ", ".join(quantidades) if quantidades else ""
+                            
+                            if procedimentos_str:
+                                log_message(f"✅ Procedimentos obtidos: {procedimentos_str}", "SUCCESS")
+                                log_message(f"✅ Quantidades obtidas: {quantidades_str}", "SUCCESS")
+                            else:
+                                log_message("⚠️ Nenhum procedimento válido encontrado", "WARNING")
+                                
+                        except Exception as e:
+                            log_message(f"⚠️ Erro ao extrair procedimentos do modal: {e}", "WARNING")
+                            procedimentos_str = ""
+                            quantidades_str = ""
                         
                         # Extrair texto clínico do modal
                         texto = ""
