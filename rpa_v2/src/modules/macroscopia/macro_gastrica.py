@@ -400,47 +400,91 @@ class MacroGastricaModule(BaseModule):
             log_message(f"Erro ao fechar exame: {e}", "ERROR")
 
     def digitar_mascara_e_buscar(self, driver, wait, mascara):
-        """Digita a máscara no campo buscaArvore e pressiona Enter"""
+        """Digita a máscara no campo buscaArvore, pressiona Enter e aguarda o "Salvar" ficar vermelho (btn-danger)."""
         # Aguardar o campo estar presente e clicável
         campo_busca = wait.until(EC.element_to_be_clickable((By.ID, "buscaArvore")))
-        
+
         # Digitar a máscara e pressionar Enter
         campo_busca.send_keys(mascara)
         campo_busca.send_keys(Keys.ENTER)
         log_message(f"✍️ Máscara '{mascara}' digitada no campo buscaArvore", "SUCCESS")
-        time.sleep(0.5)
+
+        # Aguardar o botão Salvar mudar para o estado "alterado" (classe btn-danger)
+        try:
+            log_message("⏳ Aguardando botão Salvar ficar vermelho (btn-danger)...", "INFO")
+
+            def salvar_ficou_vermelho(driver_inner):
+                try:
+                    btn = driver_inner.find_element(By.ID, "salvarMacro")
+                    cls = btn.get_attribute("class") or ""
+                    return "btn-danger" in cls
+                except Exception:
+                    return False
+
+            WebDriverWait(driver, 10).until(salvar_ficou_vermelho)
+            log_message("✅ Botão Salvar ficou vermelho, seguindo fluxo...", "SUCCESS")
+        except Exception as e:
+            log_message(f"⚠️ Timeout/erro ao aguardar botão Salvar ficar vermelho: {e}", "WARNING")
+
+        time.sleep(1)
 
     def abrir_modal_variaveis_e_preencher(self, driver, wait, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6):
-        """Abre o modal de variáveis e preenche os campos baseado na máscara"""
+        """Abre o modal de variáveis e preenche os campos baseado na máscara.
+        Nova lógica para o alerta "não há variáveis":
+        - se aparecer pela primeira vez, aceita, espera 0.5s e tenta clicar no botão de variáveis novamente;
+        - se aparecer de novo, apenas aceita e segue o fluxo normal (sem retorno antecipado).
+        """
         try:
-            # Clicar no botão "Pesquisar variáveis (F7)"
-            botao_variaveis = wait.until(
-                EC.element_to_be_clickable((By.ID, "cke_70"))
-            )
-            botao_variaveis.click()
-            log_message("🔍 Clicou no botão de variáveis", "INFO")
-            
-            # Aguardar um pouco para o sistema processar
-            time.sleep(0.8)
-            
-            # Verificar se apareceu um alerta
+            tentativas_alerta = 0
+
+            while True:
+                # Clicar no botão "Pesquisar variáveis (F7)"
+                botao_variaveis = wait.until(
+                    EC.element_to_be_clickable((By.ID, "cke_70"))
+                )
+                botao_variaveis.click()
+                log_message("🔍 Clicou no botão de variáveis", "INFO")
+
+                # Aguardar um pouco para o sistema processar
+                time.sleep(0.8)
+
+                # Verificar se apareceu um alerta
+                try:
+                    alert = driver.switch_to.alert
+                    alert_text = alert.text
+                    if "não há variáveis" in alert_text.lower():
+                        tentativas_alerta += 1
+                        log_message(f"⚠️ Alerta detectado: {alert_text} (tentativa {tentativas_alerta})", "WARNING")
+                        alert.accept()
+
+                        if tentativas_alerta == 1:
+                            # Primeira vez: tentar novamente após pequena espera
+                            log_message("🔁 Tentando abrir o modal de variáveis novamente após alerta de 'não há variáveis'", "INFO")
+                            time.sleep(0.5)
+                            continue  # volta para o while e clica de novo no botão de variáveis
+                        else:
+                            # Segunda vez ou mais: aceitar e seguir o fluxo normal
+                            log_message("⚠️ Alerta de 'não há variáveis' repetido - seguindo fluxo sem preencher variáveis", "WARNING")
+                            break
+                    else:
+                        # Outro alerta qualquer: apenas aceitar e seguir
+                        log_message(f"⚠️ Alerta inesperado detectado: {alert_text}", "WARNING")
+                        alert.accept()
+                        break
+                except Exception:
+                    # Não há alerta, tentar seguir para o modal
+                    log_message("✅ Nenhum alerta após clicar em variáveis - tentando abrir modal", "INFO")
+                    break
+
+            # Aguardar o modal aparecer (se existir)
             try:
-                alert = driver.switch_to.alert
-                alert_text = alert.text
-                if "não há variáveis" in alert_text.lower():
-                    log_message(f"⚠️ Alerta detectado: {alert_text}", "WARNING")
-                    alert.accept()  # Aceitar o alerta
-                    log_message("⚠️ Pulando preenchimento de variáveis - não há variáveis no texto", "WARNING")
-                    return
-                else:
-                    alert.accept()  # Aceitar qualquer outro alerta
-            except:
-                # Não há alerta, continuar normalmente
-                pass
-            
-            # Aguardar o modal aparecer
-            wait.until(EC.presence_of_element_located((By.CLASS_NAME, "swal2-popup")))
-            log_message("🔍 Modal de variáveis aberto", "SUCCESS")
+                wait.until(EC.presence_of_element_located((By.CLASS_NAME, "swal2-popup")))
+                log_message("🔍 Modal de variáveis aberto", "SUCCESS")
+            except Exception:
+                # Se mesmo assim não abriu modal (ex.: realmente não há variáveis), apenas seguir fluxo
+                log_message("⚠️ Modal de variáveis não foi aberto - seguindo fluxo sem preencher variáveis", "WARNING")
+                return
+
             time.sleep(0.3)
         
             # Preencher os campos usando classe genérica (IDs podem mudar)
@@ -1686,7 +1730,11 @@ class MacroGastricaModule(BaseModule):
                     return {'status': 'erro', 'detalhes': erro_texto}
             except:
                 pass
-            
+
+            self.aguardar_spinner_desaparecer(driver, wait)
+            self.aguardar_pagina_estavel(driver, wait, timeout=30)
+            time.sleep(1)
+
             log_message("✅ Envio para próxima etapa realizado com sucesso", "SUCCESS")
             return {'status': 'sucesso', 'detalhes': 'Enviado para próxima etapa'}
             
@@ -2100,19 +2148,6 @@ class MacroGastricaModule(BaseModule):
         except Exception as e:
             error_message = str(e)
             log_message(f"Erro ao processar exame {codigo}: {error_message}", "ERROR")
-            
-            # Verificar se é erro de sessão inválida
-            if "invalid session id" in error_message.lower():
-                log_message("❌ Erro de sessão inválida detectado", "ERROR")
-                return {'status': 'erro_sessao', 'detalhes': 'Sessão do browser perdida'}
-            
-            # Screenshot do erro para outros tipos de erro
-            try:
-                screenshot_path = f"erro_exame_{codigo}_{int(time.time())}.png"
-                driver.save_screenshot(screenshot_path)
-                log_message(f"Screenshot do erro salvo em: {screenshot_path}", "INFO")
-            except:
-                pass
             return {'status': 'erro', 'detalhes': error_message}
 
     def aguardar_e_processar_andamento(self, driver, wait, mascara, qtd_frag, qtd_frag_original, md1, md2, md3, qtd_frag2, qtd_frag2_original, md4, md5, md6, responsavel_macro, data_fixacao):

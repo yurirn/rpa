@@ -390,53 +390,6 @@ class XMLGeneratorAutomation(BaseModule):
             log_message(f"Stack trace:\n{erro_filtros}", "ERROR")
             raise
 
-    def validar_contagem_exames(self, total_exames_esperado: int):
-        """Valida se a contagem de exames na tela corresponde ao esperado, com múltiplas tentativas."""
-        if total_exames_esperado == 0:
-            log_message("Nenhum exame esperado para validação, pulando.", "INFO")
-            return
-
-        max_tentativas = 3
-        for tentativa in range(1, max_tentativas + 1):
-            log_message(f"🔍 Validando contagem de exames (Tentativa {tentativa}/{max_tentativas}). Esperado: {total_exames_esperado}", "INFO")
-            try:
-                # Seletor para o <p> que contém o texto "Total: exames..."
-                seletor_p = "div.h5 > p"
-
-                # Espera explícita para garantir que o texto seja carregado
-                wait = WebDriverWait(self.driver, 15)
-                elemento_p = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, seletor_p)))
-
-                texto_total = elemento_p.text
-                log_message(f"Texto encontrado na tela: '{texto_total}'", "INFO")
-
-                # Extrair o número de exames usando regex
-                match = re.search(r"exames\s+(\d+)", texto_total)
-                if not match:
-                    log_message("❌ Não foi possível encontrar a contagem de 'exames' no texto da tela.", "ERROR")
-                    raise Exception("Formato do texto de totais inesperado.")
-
-                contagem_tela = int(match.group(1))
-                log_message(f"Contagem na tela: {contagem_tela}", "INFO")
-
-                if contagem_tela == total_exames_esperado:
-                    log_message("✅ Validação bem-sucedida: a contagem de exames bate com o esperado.", "SUCCESS")
-                    return  # Sucesso, sai do método
-                else:
-                    # Erro lógico, não adianta tentar de novo. Lança a exceção imediatamente.
-                    log_message(f"❌ Validação falhou! Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}", "ERROR")
-                    raise Exception(
-                        f"Divergência na contagem de exames do lote. Esperado: {total_exames_esperado}, Encontrado: {contagem_tela}")
-
-            except Exception as e:
-                log_message(f"⚠️ Erro na tentativa {tentativa} de validação: {e}", "WARNING")
-                if tentativa < max_tentativas:
-                    log_message("Aguardando 2 segundos antes de tentar novamente...", "INFO")
-                    time.sleep(2)
-                else:
-                    log_message(f"❌ Erro crítico após {max_tentativas} tentativas de validação da contagem.", "ERROR")
-                    raise  # Lança a última exceção após todas as tentativas falharem
-
     def enviar_para_unimed(self, arquivos_extraidos, unimed_user, unimed_pass):
         try:
             log_message("Iniciando processo de upload para Unimed...", "INFO")
@@ -590,9 +543,6 @@ class XMLGeneratorAutomation(BaseModule):
             log_message("Configurando filtros e executando pesquisa...", "INFO")
             self.configurar_filtros_e_pesquisar()
 
-            log_message("Validando contagem de exames...", "INFO")
-            self.validar_contagem_exames(total_exames_lote)
-            
             if cancel_flag and cancel_flag.is_set():
                 log_message("Execução cancelada pelo usuário.", "WARNING")
                 return False
@@ -664,7 +614,6 @@ class XMLGeneratorAutomation(BaseModule):
             self.fechar_modal_se_necessario()
             self.acessar_preparar_exames_para_fatura()
             self.configurar_filtros_e_pesquisar()
-            self.validar_contagem_exames(total_exames_lote)
             if cancel_flag and cancel_flag.is_set():
                 log_message("Execução cancelada pelo usuário.", "WARNING")
                 self.fechar_navegador()

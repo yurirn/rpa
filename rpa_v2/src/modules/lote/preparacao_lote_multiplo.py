@@ -656,9 +656,20 @@ class PreparacaoLoteMultiploModule(BaseModule):
                 log_message(f"✅ Sucesso: {len(sucesso_lote)}", "SUCCESS")
                 log_message(f"⚠️ Sem resultados: {len(sem_resultados_lote)}", "WARNING")
                 log_message(f"❌ Erros: {len(erro_lote)}", "ERROR")
+                exames_com_erro = []
                 if erro_lote:
-                    exames_com_erro = [r['exame'] for r in erro_lote]
+                    exames_com_erro = [str(r['exame']) for r in erro_lote]
                     log_message(f"   - Exames com erro: {exames_com_erro}", "ERROR")
+
+                # Se houver exames com erro, mostrar popup ao usuário antes de gerar/enviar o lote
+                if erro_lote:
+                    msg_popup = (
+                        f"A preparação do lote {idx} foi concluída, porém houve {len(erro_lote)} exame(s) com erro.\n\n"
+                        f"Exames com erro:\n" + ", ".join(exames_com_erro) + "\n\n"
+                        f"Clique em 'OK' para prosseguir com a geração/envio do lote."
+                    )
+                    # Este popup é apenas informativo e aguarda o usuário confirmar (OK)
+                    messagebox.showinfo("Aviso - Exames com erro", msg_popup)
 
                 # Gerar/enviar lote após processamento, passando a contagem de exames bem-sucedidos
                 if len(sucesso_lote) > 0:
@@ -668,9 +679,6 @@ class PreparacaoLoteMultiploModule(BaseModule):
                 else:
                     log_message(f"ℹ️ Nenhum exame processado com sucesso no lote {idx}. Pulando etapa de geração/envio.", "INFO")
 
-                # Se não for o último lote, retornar à tela inicial
-                # if idx < total_lotes:
-                #     self.voltar_tela_inicial_preparacao(driver, wait)
 
             # Resumo final consolidado
             total = len(todos_resultados)
