@@ -531,6 +531,15 @@ class MacroGastricaModule(BaseModule):
                 else:
                     valores = [qtd_frag, md1, md2, md3, qtd_frag2, md4, md5, md6, qtd_frag, qtd_frag2]
 
+            elif mascara_upper in ['G/PCOLON', 'G/BCOLON']:
+                if qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "Múltiplos", md4, md5, md6, "M", "M"]
+                elif qtd_frag_original == 'mult' and not qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, qtd_frag2, md4, md5, md6, "M", qtd_frag2]
+                elif not qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = [qtd_frag, md1, md2, md3, "Múltiplos", md4, md5, md6, qtd_frag, "M"]
+                else:
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag2, md4, md5, md6, qtd_frag, qtd_frag2]
             else:
                 # Padrão original (máscaras antigas)
                 # Usar qtd_frag_original para verificar se era 'mult' na planilha
@@ -1207,6 +1216,8 @@ class MacroGastricaModule(BaseModule):
             'A/P2F': ("AN: Antro", "POLG: Pólipo gástrico"),
             'G/E2F': ("GA: Gastrica", "Esofago: Esôfago"),
             'G/P2F': ("GA: Gastrica", "POLG: Pólipo gástrico"),
+            'G/PCOLON': ("GA: Gastrica", ""),
+            'G/BCOLON': ("GA: Gastrica", "")
         }
 
         regioes = mapa_regioes.get(mascara_upper)
@@ -1616,7 +1627,7 @@ class MacroGastricaModule(BaseModule):
             except Exception as e:
                 log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
 
-            if mascara and mascara.upper() in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F']:
+            if mascara and mascara.upper() in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F', 'G/PCOLON', 'G/BCOLON']:
                 log_message("📝 Máscara de 2 frascos detectada ", "INFO")
 
                 log_message("⌨️ Executando ALT + M para adicionar nova linha", "INFO")
