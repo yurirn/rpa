@@ -244,19 +244,22 @@ class XMLGeneratorAutomation(BaseModule):
         log_message("Clicando para baixar o lote XML...", "INFO")
         
         try:
-            # Aguardar botão estar presente e visível
+            # 1. Aguardar o elemento estar PRESENTE no DOM
+            log_message("Aguardando a presença do botão de download...", "INFO")
             botao = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']"))
+                EC.presence_of_element_located((By.ID, "executarMudancaSitFaturamento"))
             )
+
+            # 2. Scroll até o botão para garantir que está visível
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", botao)
+            time.sleep(1)
+
+            # 3. Clicar no botão usando JavaScript
+            log_message("Tentando clicar no botão via JavaScript...", "INFO")
+            self.driver.execute_script("arguments[0].click();", botao)
             
-            # Scroll até o botão para garantir que está visível
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao)
-            time.sleep(0.5)
-            
-            # Clicar no botão
-            botao.click()
             log_message("✅ Botão de download clicado com sucesso", "SUCCESS")
-            
+
             # Aguardar um momento para o download iniciar
             time.sleep(2)
             

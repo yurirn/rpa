@@ -74,6 +74,16 @@
     "has_pular_para_laudos": true
   },
   {
+    "id": "conclusao_com_alteracao",
+    "name": "Digitação - Conclusão com alteração sem liberação",
+    "description": "",
+    "module_path": "modules.conclusao_com_alteracao",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
+  },
+  {
     "id": "macro_gastrica",
     "name": "Digitação - Macro 1 e 2 frascos",
     "description": "",

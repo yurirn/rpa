@@ -114,8 +114,10 @@ class MacroGastricaModule(BaseModule):
                     else:
                         qtd_frag_valor = str(qtd_frag).strip() if qtd_frag is not None else ""
 
-                    # normalização simples para frasco 2 (sem regra de 'mult' por enquanto)
-                    qtd_frag2_valor = str(qtd_frag2).strip() if qtd_frag2 is not None else ""
+                    if qtd_frag2 is not None and str(qtd_frag2).strip().lower() == 'mult':
+                        qtd_frag2_valor = '6'
+                    else:
+                        qtd_frag2_valor = str(qtd_frag2).strip() if qtd_frag2 is not None else ""
 
                     dados.append({
                         'codigo': codigo,
@@ -531,6 +533,26 @@ class MacroGastricaModule(BaseModule):
                 else:
                     valores = [qtd_frag, md1, md2, md3, qtd_frag2, md4, md5, md6, qtd_frag, qtd_frag2]
 
+            elif mascara_upper in ['G/PCOLON', 'G/BCOLON']:
+                if qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, "Múltiplos", md4, md5, md6, "M", "M"]
+                elif qtd_frag_original == 'mult' and not qtd_frag2_original == 'mult':
+                    valores = ["Múltiplos", md1, md2, md3, qtd_frag2, md4, md5, md6, "M", qtd_frag2]
+                elif not qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = [qtd_frag, md1, md2, md3, "Múltiplos", md4, md5, md6, qtd_frag, "M"]
+                else:
+                    valores = [qtd_frag, md1, md2, md3, qtd_frag2, md4, md5, md6, qtd_frag, qtd_frag2]
+
+            elif mascara_upper in ['TUBA']:
+                if qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = [md1, md2, md3, md4, md5, md6, "M", "M"]
+                elif qtd_frag_original == 'mult' and not qtd_frag2_original == 'mult':
+                    valores = [md1, md2, md3, md4, md5, md6, "M", qtd_frag2]
+                elif not qtd_frag_original == 'mult' and qtd_frag2_original == 'mult':
+                    valores = [md1, md2, md3, md4, md5, md6, qtd_frag, "M"]
+                else:
+                    valores = [md1, md2, md3, md4, md5, md6, qtd_frag, qtd_frag2]
+
             else:
                 # Padrão original (máscaras antigas)
                 # Usar qtd_frag_original para verificar se era 'mult' na planilha
@@ -616,7 +638,7 @@ class MacroGastricaModule(BaseModule):
         mascaras_apendice = ['APC']
         mascaras_prostata = ['RTU-FIT', 'RTU-FIP']
         mascaras_geral = ['HEMO-FIT', 'HEMO-FIP']
-        mascaras_utero = ['COLO']
+        mascaras_utero = ['COLO', 'TUBA']
         # Máscaras mistas estômago/intestino
         mascaras_estomago_intestino = ['G/PCOLON', 'G/BCOLON']
 
@@ -1207,6 +1229,9 @@ class MacroGastricaModule(BaseModule):
             'A/P2F': ("AN: Antro", "POLG: Pólipo gástrico"),
             'G/E2F': ("GA: Gastrica", "Esofago: Esôfago"),
             'G/P2F': ("GA: Gastrica", "POLG: Pólipo gástrico"),
+            'TUBA': ("TMA: Tuba maior", "TME: Tuba menor"),
+            'G/PCOLON': ("GA: Gastrica", ""),
+            'G/BCOLON': ("GA: Gastrica", "")
         }
 
         regioes = mapa_regioes.get(mascara_upper)
@@ -1616,7 +1641,7 @@ class MacroGastricaModule(BaseModule):
             except Exception as e:
                 log_message(f"⚠️ Erro ao definir representação: {e}", "WARNING")
 
-            if mascara and mascara.upper() in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F']:
+            if mascara and mascara.upper() in ['A/C2F', 'A/I2F', 'A/P2F', 'G/E2F', 'G/P2F', 'TUBA', 'G/PCOLON', 'G/BCOLON']:
                 log_message("📝 Máscara de 2 frascos detectada ", "INFO")
 
                 log_message("⌨️ Executando ALT + M para adicionar nova linha", "INFO")
