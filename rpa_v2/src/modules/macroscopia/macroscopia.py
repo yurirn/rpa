@@ -316,6 +316,41 @@ class MacroscopiaModule(BaseModule):
 
         time.sleep(SHORT_DELAY)
 
+        # Valida se a etapa corrente do exame é Macroscopia (ícone de seta presente)
+        try:
+            andamento_div = driver.find_element(By.ID, "divAndamentoExame")
+            itens = andamento_div.find_elements(By.CSS_SELECTOR, "li.list-group-item")
+            etapa_encontrada = False
+
+            for li in itens:
+                texto = (li.text or "").lower()
+                if "macroscopia" not in texto:
+                    continue
+                etapa_encontrada = True
+                seta = li.find_elements(By.CSS_SELECTOR, "svg.fa-arrow-right")
+                if seta:
+                    log_message("✅ Exame está na etapa Macroscopia (seta encontrada).", "SUCCESS")
+                    break
+                else:
+                    log_message("⛔ Exame não está na etapa Macroscopia (seta ausente).", "ERROR")
+                    self.fechar_exame(driver, wait)
+                    return {
+                        'status': 'etapa_incorreta',
+                        'detalhes': 'Macroscopia sem seta de etapa atual'
+                    }
+
+            if not etapa_encontrada:
+                log_message("⛔ Item 'Macroscopia' não encontrado na lista de etapas.", "ERROR")
+                self.fechar_exame(driver, wait)
+                return {
+                    'status': 'etapa_incorreta',
+                    'detalhes': "Item 'Macroscopia' não encontrado na linha do andamento"
+                }
+        except Exception as e:
+            log_message(f"❌ Erro ao validar etapa Macroscopia: {e}", "ERROR")
+            self.fechar_exame(driver, wait)
+            return {'status': 'etapa_incorreta', 'detalhes': f'Erro ao validar etapa: {e}'}
+
         if mascara:
             log_message(f"🟢 Máscara encontrada: '{mascara}' - Iniciando fluxo de processamento",
                         "INFO")
