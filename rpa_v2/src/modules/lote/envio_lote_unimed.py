@@ -53,6 +53,7 @@ class UnimedUploader(BaseModule):
     def acessar_url_pos_login(self, url_pos_login):
         log_message("Acessando página de upload TISS...", "INFO")
         self.driver.get(url_pos_login)
+        time.sleep(1)
 
     def selecionar_versao_upload(self):
         log_message(f"Selecionando versão 4.02.00 para upload...", "INFO")
