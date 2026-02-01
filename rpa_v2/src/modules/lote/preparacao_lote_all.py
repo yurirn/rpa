@@ -336,11 +336,20 @@ class PreparacaoLoteModule(BaseModule):
     def clicar_gerar_lote(self, driver, wait):
         # Clicar no botão de situação de faturamento
         try:
-            botao_situacao = wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-danger[onclick*='modalFaturamento']")))
-            botao_situacao.click()
-            log_message("Botão de situação de faturamento clicado.", "INFO")
+            # 1. Aguardar o elemento estar PRESENTE no DOM
+            log_message("Aguardando a presença do botão de download...", "INFO")
+            botao = wait.until(
+                EC.presence_of_element_located((By.ID, "executarMudancaSitFaturamento"))
+            )
+
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", botao)
             time.sleep(1)
+
+            # 3. Clicar no botão usando JavaScript
+            log_message("Tentando clicar no botão via JavaScript...", "INFO")
+            driver.execute_script("arguments[0].click();", botao)
+
+            log_message("✅ Botão de download clicado com sucesso", "SUCCESS")
 
             modal_carregando = driver.find_element(By.XPATH,
                                                    "//div[contains(@class,'modal-body') and contains(., 'Carregando')]")

@@ -75,7 +75,7 @@
   },
   {
     "id": "conclusao_com_alteracao",
-    "name": "Digitação - Conclusão com alteração sem liberação",
+    "name": "Digitação - Sem liberação",
     "description": "",
     "module_path": "modules.conclusao_com_alteracao",
     "requires_excel": true,
