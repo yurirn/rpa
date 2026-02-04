@@ -235,5 +235,15 @@
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
     "requires_unimed_credentials": false
+  },
+  {
+    "id": "baixa_lote",
+    "name": "Financeiro - Baixa de Lote",
+    "description": "Lê planilha Excel com lotes e procedimentos, acessa 'Faturas enviadas e recebimento' e registra pagamentos parciais com opção de gerar recurso.",
+    "module_path": "modules.financeiro.baixa_lote",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false
   }
 ]
