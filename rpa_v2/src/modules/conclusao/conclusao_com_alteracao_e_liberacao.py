@@ -20,23 +20,48 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
         super().__init__(nome="Conclusão com Alteração e Liberação")
 
     def get_dados_exames(self, file_path: str) -> list:
+        """Lê do Excel apenas: código do exame, patologista e unimed."""
         try:
             workbook = load_workbook(file_path)
             sheet = workbook.active
-            dados = []
+            dados: list[dict] = []
 
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
-                codigo = sheet[f'A{row}'].value
+                codigo = sheet[f"A{row}"].value
+                patologista = sheet[f"B{row}"].value
+                unimed = sheet[f"C{row}"].value
 
-                if codigo is not None:
-                    codigo = str(codigo).strip()
-                    dados.append({'codigo': codigo})
+                if codigo is None:
+                    continue
+
+                codigo = str(codigo).strip()
+                if not codigo:
+                    continue
+
+                patologista = str(patologista).strip() if patologista is not None else ""
+                unimed = str(unimed).strip() if unimed is not None else ""
+
+                dados.append({
+                    "codigo": codigo,
+                    "patologista": patologista,
+                    "unimed": unimed,
+                })
 
             workbook.close()
             return dados
         except Exception as e:
             raise Exception(f"Erro ao ler planilha: {e}")
+
+    def verificar_sessao_browser(self, driver) -> bool:
+        try:
+            driver.current_url
+            return True
+        except Exception as e:
+            if "invalid session id" in str(e).lower():
+                log_message("❌ Sessão do browser perdida", "ERROR")
+                return False
+            return True
 
     def enviar_proxima_etapa(self, driver, wait):
         """Clica no botão de enviar para próxima etapa"""
@@ -78,136 +103,76 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
             log_message(f"Erro no processo de assinatura: {e}", "ERROR")
             raise
 
-    def aguardar_usuario_salvar_conclusao(self, driver, wait, codigo, timeout=300):
-        """Aguarda o usuário fazer alterações e salvar a conclusão manualmente"""
+    def processar_exame(self, driver, wait, codigo, patologista, unimed):
+        """
+        Novo fluxo:
+        - digitar código e abrir exame
+        - aguardar usuário clicar "Enviar para próxima etapa"
+        - quando abrir modal de assinatura, assinar conforme regra
+        """
         try:
-            log_message(f"⏳ Aguardando usuário processar exame {codigo}...", "INFO")
-            log_message(f"⏳ O usuário deve fazer as alterações necessárias e clicar em Salvar",
-                        "WARNING")
-            log_message(f"⏳ Timeout: {timeout}s ({timeout // 60} minutos)", "INFO")
-
-            inicio = time.time()
-            mensagem_detectada = False
-            contador_log = 0
-
-            while time.time() - inicio < timeout:
-                try:
-                    # Verificar se o elemento existe e está visível
-                    alert_success = driver.find_element(By.CSS_SELECTOR, "div.alert.alert-success[role='status']")
-
-                    if alert_success.is_displayed():
-                        log_message(f"✅ Mensagem de sucesso detectada para exame {codigo}!",
-                                    "SUCCESS")
-                        mensagem_detectada = True
-
-                        # Aguardar a mensagem desaparecer (data-time="3" = 3 segundos)
-                        time.sleep(0.5)
-                        log_message(f"✅ Conclusão salva com sucesso pelo usuário", "SUCCESS")
-                        return True
-
-                except Exception:
-                    # Elemento não encontrado ou não visível, continuar verificando
-                    pass
-
-                # Log informativo a cada 30 segundos para não poluir
-                tempo_decorrido = int(time.time() - inicio)
-                if tempo_decorrido > contador_log and tempo_decorrido % 30 == 0:
-                    minutos = tempo_decorrido // 60
-                    segundos = tempo_decorrido % 60
-                    log_message(
-                        f"⏳ Aguardando... ({minutos}m {segundos}s)",
-                        "INFO"
-                    )
-                    contador_log = tempo_decorrido
-
-                # Intervalo muito pequeno para capturar a mensagem rápida
-                time.sleep(0.1)  # 100 milissegundos
-
-            # Timeout atingido
-            if not mensagem_detectada:
-                log_message(
-                    f"⚠️ Timeout de {timeout}s atingido - usuário não salvou o exame {codigo}",
-                    "WARNING"
-                )
-                return False
-
-        except Exception as e:
-            log_message(f"❌ Erro ao aguardar salvamento: {e}", "ERROR")
-            import traceback
-            log_message(f"❌ Stack trace: {traceback.format_exc()}", "ERROR")
-            return False
-
-    def processar_exame(self, driver, wait, codigo):
-        """Processa um exame individual"""
-        try:
-            # Verificar se a sessão do browser ainda está ativa
             if not self.verificar_sessao_browser(driver):
                 raise Exception("Sessão do browser perdida - necessário reiniciar")
 
-            campo_codigo = None
-            try:
-                campo_codigo = wait.until(EC.presence_of_element_located((By.ID, "inputSearchCodBarra")))
-                log_message("✅ Campo encontrado pelo ID", "INFO")
-            except:
-                log_message("❌ Campo não encontrado", "ERROR")
-                raise Exception("Campo de código de barras não encontrado")
-
-            # Interagir com o campo
+            campo_codigo = wait.until(
+                EC.presence_of_element_located((By.ID, "inputSearchCodBarra"))
+            )
             self.interagir_com_campo_codigo(driver, campo_codigo, codigo)
 
-            # Aguardar usuário salvar
-            if not self.aguardar_usuario_salvar_conclusao(driver, wait, codigo):
-                return {'status': 'timeout', 'detalhes': 'Usuário não salvou no tempo esperado'}
+            # Esperar usuário enviar para próxima etapa (não clicar automaticamente)
+            if not self.aguardar_usuario_enviar_para_proxima_etapa(driver, wait, codigo, timeout=600):
+                return {"status": "timeout", "detalhes": "Usuário não enviou para próxima etapa no tempo esperado"}
 
-            # Enviar para próxima etapa
-            log_message("📤 Enviando para próxima etapa...", "INFO")
-            self.enviar_proxima_etapa(driver, wait)
-
-            # Assinar com George
-            log_message("✍️ Assinando com Dr. George...", "INFO")
-            self.assinar_com_george(driver, wait)
+            is_unimed = (unimed or "").strip().lower() == "sim"
+            self.processar_assinatura(driver, wait, patologista, is_unimed)
 
             log_message("🎉 Exame processado com sucesso!", "SUCCESS")
-            return {'status': 'sucesso', 'detalhes': 'Exame processado e assinado'}
+            return {"status": "sucesso", "detalhes": "Exame enviado pelo usuário e assinado"}
 
         except Exception as e:
             error_message = str(e)
             log_message(f"❌ Erro ao processar exame {codigo}: {error_message}", "ERROR")
 
             if "invalid session id" in error_message.lower():
-                return {'status': 'erro_sessao', 'detalhes': 'Sessão do browser perdida'}
+                return {"status": "erro_sessao", "detalhes": "Sessão do browser perdida"}
 
-            return {'status': 'erro', 'detalhes': error_message}
+            return {"status": "erro", "detalhes": error_message}
 
     def interagir_com_campo_codigo(self, driver, campo_codigo, codigo):
-        """Interage com o campo de código usando os métodos já implementados"""
         log_message("Campo de código encontrado, interagindo...", "INFO")
 
         try:
             campo_codigo.clear()
             log_message("Campo limpo com sucesso", "INFO")
-        except:
+        except Exception:
             driver.execute_script("arguments[0].value = '';", campo_codigo)
             log_message("Campo limpo com JavaScript", "INFO")
 
         time.sleep(0.5)
 
-        # Digitar o código
         try:
             campo_codigo.send_keys(codigo)
             log_message(f"Código '{codigo}' digitado com sucesso", "INFO")
-        except:
+        except Exception:
             driver.execute_script(f"arguments[0].value = '{codigo}';", campo_codigo)
+            driver.execute_script(
+                """
+                var element = arguments[0];
+                var event = new Event('input', { bubbles: true });
+                element.dispatchEvent(event);
+                """,
+                campo_codigo,
+            )
             log_message(f"Código '{codigo}' digitado com JavaScript", "INFO")
 
         time.sleep(1)
 
-        # Pressionar Enter
         try:
             campo_codigo.send_keys(Keys.ENTER)
             log_message("⌨️ Enter pressionado com sucesso", "INFO")
-        except:
-            driver.execute_script("""
+        except Exception:
+            driver.execute_script(
+                """
                 var element = arguments[0];
                 var event = new KeyboardEvent('keydown', {
                     key: 'Enter',
@@ -216,72 +181,185 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
                     bubbles: true
                 });
                 element.dispatchEvent(event);
-            """, campo_codigo)
+                """,
+                campo_codigo,
+            )
             log_message("⌨️ Enter pressionado com JavaScript", "INFO")
 
+        # Aguardar div de andamento aparecer (mantém seu comportamento)
         log_message("Aguardando div de andamento do exame aparecer...", "INFO")
-
-        # Aguardar mais tempo para o carregamento após digitar o código
         timeout_andamento = 30
         inicio = time.time()
 
         while time.time() - inicio < timeout_andamento:
             try:
-                # Verificar se a div de andamento apareceu
                 andamento_div = driver.find_element(By.ID, "divAndamentoExame")
                 if andamento_div and andamento_div.is_displayed():
                     log_message("📋 Div de andamento do exame encontrada!", "SUCCESS")
                     break
-            except:
+            except Exception:
                 pass
 
             time.sleep(1)
-            if int(time.time() - inicio) % 5 == 0:  # Log a cada 5 segundos
-                log_message(f"⏳ Aguardando carregamento... ({int(time.time() - inicio)}s)", "INFO")
+            if int(time.time() - inicio) % 5 == 0:
+                log_message(
+                    f"⏳ Aguardando carregamento... ({int(time.time() - inicio)}s)",
+                    "INFO",
+                )
         else:
             log_message("⚠️ Div de andamento não apareceu no tempo esperado", "WARNING")
-            return {'status': 'sem_andamento', 'detalhes': 'Exame não encontrado ou não carregou'}
+            return {"status": "sem_andamento", "detalhes": "Exame não encontrado ou não carregou"}
 
         time.sleep(1)
+        return {"status": "ok"}
+
+    def aguardar_usuario_enviar_para_proxima_etapa(self, driver, wait, codigo, timeout=600):
+        """
+        Aguarda o usuário clicar manualmente em "Enviar para próxima etapa".
+        Critério robusto: aparecer o modal de assinatura (#assinatura).
+        """
+        try:
+            log_message(f"⏳ Aguardando usuário clicar em Enviar para próxima etapa (exame {codigo})...", "WARNING")
+            log_message(f"⏳ Timeout: {timeout}s ({timeout // 60} minutos)", "INFO")
+
+            inicio = time.time()
+            contador_log = 0
+
+            while time.time() - inicio < timeout:
+                try:
+                    assinatura_modal = driver.find_element(By.ID, "assinatura")
+                    if assinatura_modal.is_displayed():
+                        log_message("📋 Modal de assinatura detectado (usuário enviou para próxima etapa)", "SUCCESS")
+                        return True
+                except Exception:
+                    pass
+
+                tempo_decorrido = int(time.time() - inicio)
+                if tempo_decorrido > contador_log and tempo_decorrido % 30 == 0:
+                    minutos = tempo_decorrido // 60
+                    segundos = tempo_decorrido % 60
+                    log_message(f"⏳ Aguardando envio... ({minutos}m {segundos}s)", "INFO")
+                    contador_log = tempo_decorrido
+
+                time.sleep(0.2)
+
+            log_message(
+                f"⚠️ Timeout de {timeout}s atingido - usuário não enviou o exame {codigo} para próxima etapa",
+                "WARNING",
+            )
+            return False
+
+        except Exception as e:
+            log_message(f"❌ Erro ao aguardar envio: {e}", "ERROR")
+            return False
+
+    def get_patologista_info(self, nome_patologista):
+        """
+        Mapeamento: NOME -> (checkbox_value, senha)
+        Reaproveite do `conclusao.py` e complete os values corretos.
+        """
+        patologistas = {
+            "GEORGE": ("2173", "1323"),
+            "LEANDRO": ("73069", "1308"),
+            "MIRELLA": ("269762", "6523"),
+            "MARINA": ("269765", "1404"),
+            "ARYELA": ("306997", "1209"),
+        }
+
+        nome_upper = (nome_patologista or "").upper().strip()
+        if nome_upper in patologistas:
+            return patologistas[nome_upper]
+
+        log_message(f"⚠️ Patologista '{nome_patologista}' não encontrado no mapeamento", "WARNING")
+        return None
+
+    def assinar_com_patologista(self, driver, wait, nome_patologista, checkbox_value, senha):
+        try:
+            log_message(f"📝 Assinando com {nome_patologista}...", "INFO")
+
+            checkbox = wait.until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, f"//input[@type='checkbox' and @value='{checkbox_value}']")
+                )
+            )
+            checkbox.click()
+            log_message(f"✅ Checkbox de {nome_patologista} marcado", "INFO")
+            time.sleep(0.5)
+
+            campo_senha = wait.until(
+                EC.presence_of_element_located((By.NAME, f"senha_{checkbox_value}"))
+            )
+            campo_senha.clear()
+            campo_senha.send_keys(senha)
+            log_message(f"🔐 Senha de {nome_patologista} digitada", "INFO")
+            time.sleep(0.5)
+
+        except Exception as e:
+            log_message(f"Erro ao assinar com {nome_patologista}: {e}", "ERROR")
+            raise
+
+    def processar_assinatura(self, driver, wait, patologista, is_unimed: bool):
+        """
+        Regra:
+        - sempre assina com o patologista da planilha
+        - se UNIMED=sim, assina também com George
+        - depois clica em "Assinar" (salvarAss)
+        """
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "assinatura")))
+            log_message("📋 Modal de assinatura aberto", "INFO")
+
+            info_patologista = self.get_patologista_info(patologista)
+            if not info_patologista:
+                raise Exception(f"Patologista '{patologista}' não encontrado no sistema")
+
+            checkbox_patologista, senha_patologista = info_patologista
+            self.assinar_com_patologista(driver, wait, patologista, checkbox_patologista, senha_patologista)
+
+            if is_unimed:
+                info_george = self.get_patologista_info("GEORGE")
+                if not info_george:
+                    raise Exception("George não encontrado no mapeamento")
+                checkbox_george, senha_george = info_george
+                self.assinar_com_patologista(driver, wait, "Dr. George", checkbox_george, senha_george)
+
+            botao_assinar = wait.until(EC.element_to_be_clickable((By.ID, "salvarAss")))
+            botao_assinar.click()
+            log_message("✍️ Clicou em Assinar", "INFO")
+            time.sleep(1.5)
+
+        except Exception as e:
+            log_message(f"Erro no processo de assinatura: {e}", "ERROR")
+            raise
 
     def mostrar_resumo_final(self, resultados):
-        """Mostra o resumo final do processamento"""
         total = len(resultados)
-        sucesso = len([r for r in resultados if r['status'] == 'sucesso'])
-        timeout = len([r for r in resultados if r['status'] == 'timeout'])
-        erros = len([r for r in resultados if 'erro' in r['status']])
+        sucesso = len([r for r in resultados if r["status"] == "sucesso"])
+        timeout = len([r for r in resultados if r["status"] == "timeout"])
+        erros = len([r for r in resultados if "erro" in r["status"]])
 
         log_message("\n" + "=" * 50, "INFO")
         log_message("RESUMO FINAL DO PROCESSAMENTO", "INFO")
         log_message("=" * 50, "INFO")
         log_message(f"Total de exames: {total}", "INFO")
         log_message(f"✅ Processados com sucesso: {sucesso}", "SUCCESS")
-        log_message(f"⏱️ Timeout (usuário não salvou): {timeout}", "WARNING")
+        log_message(f"⏱️ Timeout (usuário não enviou): {timeout}", "WARNING")
         log_message(f"❌ Erros de processamento: {erros}", "ERROR")
 
         if erros > 0:
             log_message("\nDetalhes dos erros:", "ERROR")
             for r in resultados:
-                if 'erro' in r['status']:
+                if "erro" in r["status"]:
                     log_message(f"- {r['codigo']}: {r['detalhes']}", "ERROR")
 
-        messagebox.showinfo("Processamento Concluído",
-                            f"✅ Processamento finalizado!\n\n"
-                            f"Total: {total}\n"
-                            f"Sucesso: {sucesso}\n"
-                            f"Timeout: {timeout}\n"
-                            f"Erros: {erros}")
-
-    def verificar_sessao_browser(self, driver) -> bool:
-        """Verifica se a sessão do browser ainda está ativa"""
-        try:
-            driver.current_url
-            return True
-        except Exception as e:
-            if "invalid session id" in str(e).lower():
-                log_message("❌ Sessão do browser perdida", "ERROR")
-                return False
-            return True
+        messagebox.showinfo(
+            "Processamento Concluído",
+            f"✅ Processamento finalizado!\n\n"
+            f"Total: {total}\n"
+            f"Sucesso: {sucesso}\n"
+            f"Timeout: {timeout}\n"
+            f"Erros: {erros}",
+        )
 
     def run(self, params: dict):
         username = params.get("username")
@@ -290,14 +368,11 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
         cancel_flag = params.get("cancel_flag")
 
         try:
-            # Lê os dados dos exames da planilha
             dados_exames = self.get_dados_exames(excel_file)
             if not dados_exames:
                 messagebox.showerror("Erro", "Nenhum dado de exame encontrado na planilha.")
                 return
-
             log_message(f"Encontrados {len(dados_exames)} exames para processar", "INFO")
-
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
             return
@@ -312,10 +387,7 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
 
             log_message("Iniciando automação de conclusão com alteração e liberação...", "INFO")
 
-            # Login
-            log_message("Fazendo login...", "INFO")
             driver.get(url)
-
             wait.until(EC.presence_of_element_located((By.ID, "username")))
 
             username_field = driver.find_element(By.ID, "username")
@@ -329,13 +401,14 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
             submit_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
             submit_button.click()
 
-            # Navegar para módulo de exames
+            # Navegação módulo (mantém seu comportamento)
             log_message("Verificando se precisa navegar para módulo de exames...", "INFO")
             current_url = driver.current_url
             if current_url == "https://dap.pathoweb.com.br/" or "trocarModulo" in current_url:
                 try:
                     modulo_link = wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']")))
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href='/site/trocarModulo?modulo=1']"))
+                    )
                     modulo_link.click()
                     time.sleep(2)
                     log_message("✅ Navegação para módulo de exames realizada", "SUCCESS")
@@ -345,8 +418,9 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
 
             # Fechar modal se aparecer
             try:
-                modal_close_button = driver.find_element(By.CSS_SELECTOR,
-                                                         "#mensagemParaClienteModal .modal-footer button")
+                modal_close_button = driver.find_element(
+                    By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button"
+                )
                 if modal_close_button.is_displayed():
                     modal_close_button.click()
             except Exception:
@@ -354,25 +428,29 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
 
             log_message("✅ Login realizado com sucesso. Iniciando processamento dos exames.", "SUCCESS")
 
-            # Processar cada exame da planilha
             for i, exame_data in enumerate(dados_exames, 1):
                 if cancel_flag and cancel_flag.is_set():
                     log_message("Execução cancelada pelo usuário.", "WARNING")
                     break
 
-                codigo = exame_data['codigo']
+                codigo = exame_data["codigo"]
+                patologista = exame_data["patologista"]
+                unimed = exame_data["unimed"]
 
-                log_message(f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo}", "INFO")
+                log_message(
+                    f"\n➡️ Processando exame {i}/{len(dados_exames)}: {codigo} (patologista: {patologista}, unimed: {unimed})",
+                    "INFO",
+                )
 
-                # Processar este exame específico
-                resultado = self.processar_exame(driver, wait, codigo)
-                resultados.append({
-                    'codigo': codigo,
-                    'status': resultado['status'],
-                    'detalhes': resultado.get('detalhes', '')
-                })
+                resultado = self.processar_exame(driver, wait, codigo, patologista, unimed)
+                resultados.append(
+                    {
+                        "codigo": codigo,
+                        "status": resultado["status"],
+                        "detalhes": resultado.get("detalhes", ""),
+                    }
+                )
 
-            # Mostrar resumo final
             self.mostrar_resumo_final(resultados)
 
         except Exception as e:

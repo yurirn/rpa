@@ -392,12 +392,334 @@ class ConclusaoModule(BaseModule):
             log_message(f"Erro no processo de assinatura: {e}", "ERROR")
             raise
 
+    def processar_visualizacao_laudos_final(self, driver, wait, dados_exames):
+        """Processa a etapa final de visualização de laudos em lote"""
+        try:
+            log_message("\n" + "=" * 50, "INFO")
+            log_message("INICIANDO PROCESSO DE VISUALIZAÇÃO DE LAUDOS", "INFO")
+            log_message("=" * 50, "INFO")
+
+            # 1. Marcar checkbox acumular
+            self.marcar_checkbox_acumular(driver, wait)
+
+            # 2. Acumular todos os exames no formulário
+            self.acumular_exames_no_formulario(driver, wait, dados_exames)
+
+            # 3. Selecionar todos os exames
+            self.selecionar_todos_exames(driver, wait)
+
+            # 4. Clicar no botão de ações
+            self.clicar_botao_acoes(driver, wait)
+
+            # 5. Clicar na opção Laudos
+            self.clicar_opcao_laudos(driver, wait)
+
+            log_message("\n" + "=" * 50, "SUCCESS")
+            log_message("PROCESSO DE VISUALIZAÇÃO DE LAUDOS CONCLUÍDO", "SUCCESS")
+            log_message("=" * 50 + "\n", "SUCCESS")
+
+        except Exception as e:
+            log_message(f"❌ Erro durante processo de visualização de laudos: {e}", "ERROR")
+            raise
+
+    def clicar_opcao_laudos(self, driver, wait):
+        """Clica na opção 'Laudos' do dropdown"""
+        try:
+            log_message("📄 Clicando na opção 'Laudos'...", "INFO")
+
+            # Encontrar o link "Laudos" no dropdown
+            link_laudos = wait.until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//a[@data-url='/moduloExame/visualizarLaudosAjax' and @data-index='2plus']"))
+            )
+
+            # Clicar no link
+            link_laudos.click()
+            log_message("✅ Opção 'Laudos' clicada", "SUCCESS")
+            time.sleep(3)
+
+            # Aguardar o popup abrir (se necessário)
+            log_message("⏳ Aguardando processamento...", "INFO")
+            time.sleep(2)
+
+        except Exception as e:
+            log_message(f"Erro ao clicar na opção Laudos: {e}", "ERROR")
+            raise
+
+    def clicar_botao_acoes(self, driver, wait):
+        """Clica no botão de ações (engrenagem)"""
+        try:
+            log_message("⚙️ Clicando no botão Ações...", "INFO")
+
+            # Encontrar o botão de ações
+            botao_acoes = wait.until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//a[@class='btn btn-default dropdown-toggle btn-sm' and @data-toggle='dropdown']"))
+            )
+
+            # Rolar até o botão
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", botao_acoes)
+            time.sleep(1)
+
+            # Clicar no botão
+            botao_acoes.click()
+            log_message("✅ Botão Ações clicado, dropdown aberto", "SUCCESS")
+            time.sleep(1.5)
+
+        except Exception as e:
+            log_message(f"Erro ao clicar no botão Ações: {e}", "ERROR")
+            raise
+
+    def selecionar_todos_exames(self, driver, wait):
+        """Clica no checkbox 'markAll' para selecionar todos os exames"""
+        try:
+            log_message("☑️ Selecionando todos os exames...", "INFO")
+
+            # Verificar quantos exames foram acumulados
+            try:
+                tbody = driver.find_element(By.ID, "tabelaLocalizarExamesTbody")
+                linhas = tbody.find_elements(By.TAG_NAME, "tr")
+                log_message(f"📊 Encontrados {len(linhas)} exames na tabela", "INFO")
+
+                if len(linhas) == 0:
+                    raise Exception("Nenhum exame foi acumulado na tabela!")
+            except Exception as e:
+                log_message(f"⚠️ Erro ao verificar tabela: {e}", "WARNING")
+
+            # Tentar múltiplos métodos para selecionar todos
+            success = False
+
+            # Método 1: Click no checkbox markAll via seletor CSS
+            try:
+                checkbox_mark_all = wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input.markAll"))
+                )
+
+                # Rolar até o checkbox
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});",
+                                      checkbox_mark_all)
+                time.sleep(0.5)
+
+                # Clicar
+                checkbox_mark_all.click()
+                time.sleep(1.5)
+                log_message("✅ Método 1: Click no markAll executado", "SUCCESS")
+                success = True
+            except Exception as e1:
+                log_message(f"⚠️ Método 1 falhou: {e1}", "WARNING")
+
+                # Método 2: Click via JavaScript
+                try:
+                    driver.execute_script("""
+                        var checkbox = document.querySelector('input.markAll');
+                        if (checkbox) {
+                            checkbox.click();
+                        }
+                    """)
+                    time.sleep(1.5)
+                    log_message("✅ Método 2: Click via JavaScript executado", "SUCCESS")
+                    success = True
+                except Exception as e2:
+                    log_message(f"⚠️ Método 2 falhou: {e2}", "WARNING")
+
+                    # Método 3: Selecionar todos manualmente
+                    try:
+                        checkboxes = driver.find_elements(By.CSS_SELECTOR, "input.escolhaExameLote")
+                        log_message(f"📋 Selecionando {len(checkboxes)} exames manualmente...", "INFO")
+                        for cb in checkboxes:
+                            if not cb.is_selected():
+                                cb.click()
+                                time.sleep(0.2)
+                        log_message("✅ Método 3: Seleção manual executada", "SUCCESS")
+                        success = True
+                    except Exception as e3:
+                        log_message(f"❌ Método 3 falhou: {e3}", "ERROR")
+
+            if success:
+                # Verificar quantos foram selecionados
+                try:
+                    selecionados = driver.find_elements(By.CSS_SELECTOR, "input.escolhaExameLote:checked")
+                    log_message(f"✔️ CONFIRMADO: {len(selecionados)} exames selecionados!", "SUCCESS")
+                except:
+                    pass
+            else:
+                raise Exception("Não foi possível selecionar os exames")
+
+        except Exception as e:
+            log_message(f"❌ Erro ao selecionar todos os exames: {e}", "ERROR")
+            raise
+
+    def marcar_checkbox_acumular(self, driver, wait):
+        """Marca o checkbox 'acumular' na tela principal"""
+        try:
+            log_message("📌 Marcando checkbox 'acumular'...", "INFO")
+
+            # Aguardar o checkbox estar presente
+            checkbox = wait.until(EC.presence_of_element_located((By.ID, "acumular")))
+            time.sleep(1)
+
+            # Verificar se já está marcado (pela classe do wrapper do iCheck)
+            try:
+                wrapper = driver.find_element(By.XPATH,
+                                              "//input[@id='acumular']/parent::div[contains(@class, 'icheckbox')]")
+                wrapper_classes = wrapper.get_attribute("class")
+                is_checked_visually = "checked" in wrapper_classes
+            except:
+                # Se não encontrar o wrapper, verificar pelo checkbox mesmo
+                is_checked_visually = driver.execute_script("return document.getElementById('acumular').checked;")
+
+            if not is_checked_visually:
+                log_message("🖱️ Tentando marcar checkbox usando iCheck...", "INFO")
+
+                # Tentar método 1: Trigger do iCheck via jQuery
+                try:
+                    driver.execute_script("""
+                        $('#acumular').iCheck('check');
+                    """)
+                    time.sleep(2)
+                    log_message("✅ Método 1: iCheck check() executado", "SUCCESS")
+                except Exception as e1:
+                    log_message(f"⚠️ Método 1 falhou: {e1}", "WARNING")
+
+                    # Tentar método 2: Clicar no wrapper da div
+                    try:
+                        wrapper = driver.find_element(By.XPATH,
+                                                      "//input[@id='acumular']/following-sibling::ins[@class='iCheck-helper']")
+                        wrapper.click()
+                        time.sleep(2)
+                        log_message("✅ Método 2: Click no iCheck-helper executado", "SUCCESS")
+                    except Exception as e2:
+                        log_message(f"⚠️ Método 2 falhou: {e2}", "WARNING")
+
+                        # Tentar método 3: Click direto no checkbox via JavaScript
+                        try:
+                            driver.execute_script("""
+                                var checkbox = document.getElementById('acumular');
+                                checkbox.click();
+                            """)
+                            time.sleep(2)
+                            log_message("✅ Método 3: Click via JavaScript executado", "SUCCESS")
+                        except Exception as e3:
+                            log_message(f"❌ Método 3 falhou: {e3}", "ERROR")
+                            raise Exception("Não foi possível marcar o checkbox acumular")
+
+                # Verificar se foi marcado (pela classe visual do iCheck)
+                try:
+                    time.sleep(1)  # Aguardar um pouco mais para o iCheck atualizar
+                    wrapper = driver.find_element(By.XPATH,
+                                                  "//input[@id='acumular']/parent::div[contains(@class, 'icheckbox')]")
+                    wrapper_classes = wrapper.get_attribute("class")
+                    is_checked_final = "checked" in wrapper_classes
+
+                    if is_checked_final:
+                        log_message("✔️ CONFIRMADO: Checkbox 'acumular' está marcado visualmente!", "SUCCESS")
+                    else:
+                        # Se não tem a classe checked, mas o iCheck foi executado, assumir que está ok
+                        log_message("⚠️ Checkbox pode estar marcado (iCheck executado com sucesso)", "WARNING")
+                        log_message("▶️ Continuando processamento...", "INFO")
+                except:
+                    # Se não conseguir verificar, mas executou o comando, assumir que funcionou
+                    log_message("✅ Comando de marcação executado, continuando...", "INFO")
+
+            else:
+                log_message("✅ Checkbox 'acumular' já estava marcado", "INFO")
+
+        except Exception as e:
+            log_message(f"❌ Erro crítico ao marcar checkbox acumular: {e}", "ERROR")
+            raise
+
+    def acumular_exames_no_formulario(self, driver, wait, dados_exames):
+        """Acumula todos os exames no formulário digitando os códigos"""
+        try:
+            log_message(f"\n📝 Iniciando acumulação de {len(dados_exames)} exames...", "INFO")
+
+            for i, exame_data in enumerate(dados_exames, 1):
+                codigo = exame_data['codigo']
+                log_message(f"➡️ Acumulando exame {i}/{len(dados_exames)}: {codigo}", "INFO")
+
+                # Delay progressivo conforme mencionado pelo usuário
+                # Quanto mais exames acumulados, mais lento fica o sistema
+                delay_base = 1.0
+                delay_progressivo = min(delay_base + (i * 0.2), 5.0)  # Máximo de 5 segundos
+
+                tentativas = 0
+                max_tentativas = 3
+
+                while tentativas < max_tentativas:
+                    try:
+                        # Encontrar o campo de código de barras
+                        campo_codigo = wait.until(
+                            EC.element_to_be_clickable((By.ID, "inputSearchCodBarra"))
+                        )
+
+                        # Limpar o campo
+                        campo_codigo.clear()
+                        time.sleep(0.3)
+
+                        # Digitar o código
+                        campo_codigo.send_keys(codigo)
+                        time.sleep(0.5)
+
+                        # Pressionar Enter
+                        campo_codigo.send_keys(Keys.ENTER)
+                        log_message(f"✅ Código {codigo} digitado e Enter pressionado", "INFO")
+
+                        # Aguardar o modal de carregamento desaparecer antes de continuar
+                        self.aguardar_modal_carregamento_desaparecer(driver, wait, timeout=30)
+
+                        # Aguardar delay progressivo para dar tempo ao sistema processar
+                        log_message(f"⏳ Aguardando {delay_progressivo:.1f}s para sistema processar...", "INFO")
+                        time.sleep(delay_progressivo)
+
+                        # Verificar se o campo está realmente interagível antes de continuar
+                        try:
+                            campo_codigo = wait.until(
+                                EC.element_to_be_clickable((By.ID, "inputSearchCodBarra"))
+                            )
+                            log_message(f"✅ Campo de código está interagível para próximo exame", "SUCCESS")
+                            break  # Sucesso, sair do loop de tentativas
+                        except Exception as e:
+                            log_message(f"⚠️ Campo não está interagível ainda: {e}", "WARNING")
+                            tentativas += 1
+                            if tentativas < max_tentativas:
+                                log_message(f"🔄 Tentativa {tentativas + 1}/{max_tentativas} em 3 segundos...",
+                                            "WARNING")
+                                time.sleep(3)
+                            else:
+                                log_message(f"⚠️ Máximo de tentativas atingido, continuando mesmo assim...", "WARNING")
+
+                    except Exception as e:
+                        tentativas += 1
+                        log_message(f"❌ Erro na tentativa {tentativas}: {e}", "ERROR")
+                        if tentativas < max_tentativas:
+                            log_message(f"🔄 Tentando novamente em 5 segundos...", "WARNING")
+                            time.sleep(5)
+                        else:
+                            log_message(f"❌ Máximo de tentativas atingido para exame {codigo}", "ERROR")
+                            raise
+
+                # Verificar se o exame foi adicionado na tabela
+                try:
+                    tbody = driver.find_element(By.ID, "tabelaLocalizarExamesTbody")
+                    linhas = tbody.find_elements(By.TAG_NAME, "tr")
+                    log_message(f"📊 Total de exames acumulados: {len(linhas)}", "INFO")
+                except:
+                    pass
+
+            log_message("✅ Todos os exames foram acumulados no formulário", "SUCCESS")
+            time.sleep(2)
+
+        except Exception as e:
+            log_message(f"Erro ao acumular exames: {e}", "ERROR")
+            raise
+
     def run(self, params: dict):
         username = params.get("username")
         password = params.get("password")
         excel_file = params.get("excel_file")
         cancel_flag = params.get("cancel_flag")
         headless_mode = params.get("headless_mode", False)
+        pular_para_laudos = params.get("pular_para_laudos", False)
 
         try:
             # Lê os dados dos exames da planilha (código e máscara)
@@ -407,6 +729,9 @@ class ConclusaoModule(BaseModule):
                 return
 
             log_message(f"Encontrados {len(dados_exames)} exames para processar", "INFO")
+
+            if pular_para_laudos:
+                log_message("⚡ MODO RÁPIDO: Pulando processo de conclusão e indo direto para visualização de laudos", "WARNING")
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao ler o Excel: {e}")
@@ -478,6 +803,22 @@ class ConclusaoModule(BaseModule):
                 pass
 
             log_message("✅ Login realizado com sucesso. Iniciando processamento dos exames.", "SUCCESS")
+
+            if pular_para_laudos:
+                log_message("\n" + "=" * 70, "INFO")
+                log_message("⚡ MODO RÁPIDO ATIVADO - PULANDO PROCESSO DE CONCLUSÃO", "WARNING")
+                log_message("=" * 70, "INFO")
+
+                # Ir direto para visualização de laudos
+                try:
+                    self.processar_visualizacao_laudos_final(driver, wait, dados_exames)
+                    log_message("✅ Visualização de laudos concluída com sucesso!", "SUCCESS")
+                except Exception as laudos_error:
+                    log_message(f"❌ Erro durante visualização de laudos: {laudos_error}", "ERROR")
+                    messagebox.showerror("Erro", f"Erro durante visualização de laudos:\n{str(laudos_error)[:200]}")
+
+                # Finalizar sem fazer mais nada
+                return
 
             # Processar cada exame da planilha (modo normal)
             for i, exame_data in enumerate(dados_exames, 1):
