@@ -20,14 +20,21 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
         super().__init__(nome="Conclusão com Alteração e Liberação")
 
     def get_dados_exames(self, file_path: str) -> list:
-        """Lê do Excel apenas: código do exame, patologista e unimed."""
+        """Lê do Excel apenas: código do exame, patologista e unimed.
+        Se patologista/unimed estiverem vazios, herda o último valor não-vazio.
+        """
         try:
             workbook = load_workbook(file_path)
             sheet = workbook.active
             dados: list[dict] = []
 
+            ultimo_patologista = ""
+            ultima_unimed = ""
+
             # Lê da linha 2 em diante (linha 1 é cabeçalho)
             for row in range(2, sheet.max_row + 1):
+                valores_herdados = []
+
                 codigo = sheet[f"A{row}"].value
                 patologista = sheet[f"B{row}"].value
                 unimed = sheet[f"C{row}"].value
@@ -39,14 +46,38 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
                 if not codigo:
                     continue
 
-                patologista = str(patologista).strip() if patologista is not None else ""
-                unimed = str(unimed).strip() if unimed is not None else ""
+                # Patologista: salva último não-vazio, senão herda
+                if patologista is not None and str(patologista).strip():
+                    patologista = str(patologista).strip()
+                    ultimo_patologista = patologista
+                else:
+                    patologista = ultimo_patologista
+                    if patologista:
+                        valores_herdados.append(f"patologista='{patologista}'")
 
-                dados.append({
-                    "codigo": codigo,
-                    "patologista": patologista,
-                    "unimed": unimed,
-                })
+                # Unimed: salva último não-vazio, senão herda
+                if unimed is not None and str(unimed).strip():
+                    unimed = str(unimed).strip()
+                    ultima_unimed = unimed
+                else:
+                    unimed = ultima_unimed
+                    if unimed:
+                        valores_herdados.append(f"unimed='{unimed}'")
+
+                # Log quando valores são herdados
+                if valores_herdados:
+                    log_message(
+                        f"📋 Linha {row}: Exame {codigo} herdou valores: {', '.join(valores_herdados)}",
+                        "INFO",
+                    )
+
+                dados.append(
+                    {
+                        "codigo": codigo,
+                        "patologista": patologista,
+                        "unimed": unimed,
+                    }
+                )
 
             workbook.close()
             return dados
