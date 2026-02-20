@@ -880,6 +880,45 @@ class LancamentoGuiaUnimedModule(BaseModule):
                 
                 log_message(f"✅ Status da guia {numero_guia}: {status_guia}", "SUCCESS")
                 
+                # Validar quantidade solicitada vs quantidade autorizada
+                qtd_divergente = False
+                procedimentos_divergentes = []
+                
+                try:
+                    div_procedimentos = driver.find_element(By.ID, "procedimentos")
+                    linhas_procedimentos = div_procedimentos.find_elements(By.CSS_SELECTOR, "div.row")
+                    
+                    for linha in linhas_procedimentos[1:]:
+                        colunas = linha.find_elements(By.CSS_SELECTOR, "div[class^='col-md-']")
+                        if len(colunas) >= 4:
+                            inputs = linha.find_elements(By.CSS_SELECTOR, "input.form-control")
+                            if len(inputs) >= 4:
+                                codigo = inputs[0].get_attribute("value").strip()
+                                qtd_solicitada = inputs[2].get_attribute("value").strip()
+                                qtd_autorizada = inputs[3].get_attribute("value").strip()
+                                
+                                log_message(f"📋 Procedimento {codigo}: Qtd Solicitada={qtd_solicitada}, Qtd Autorizada={qtd_autorizada}", "INFO")
+                                
+                                if qtd_solicitada != qtd_autorizada:
+                                    qtd_divergente = True
+                                    procedimentos_divergentes.append(
+                                        f"{codigo} (Solic: {qtd_solicitada}, Autoriz: {qtd_autorizada})"
+                                    )
+                                    log_message(f"⚠️ Quantidade divergente no procedimento {codigo}: Solicitada={qtd_solicitada}, Autorizada={qtd_autorizada}", "WARNING")
+                    
+                except Exception as e_proc:
+                    log_message(f"⚠️ Não foi possível verificar procedimentos da guia {numero_guia}: {e_proc}", "WARNING")
+                
+                if qtd_divergente:
+                    erro_msg = f"Quantidade autorizada divergente: {'; '.join(procedimentos_divergentes)}"
+                    log_message(f"❌ Guia {numero_guia}: {erro_msg}", "ERROR")
+                    return {
+                        'sucesso': False,
+                        'status_guia': status_guia,
+                        'numero_guia': numero_guia,
+                        'erro': erro_msg
+                    }
+                
                 return {
                     'sucesso': True,
                     'status_guia': status_guia,
