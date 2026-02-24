@@ -334,6 +334,7 @@ class ConclusaoModule(BaseModule):
             'MIRELLA': ('269762', '6523'),  # Substitua XXXXX pelo valor correto do checkbox
             'MARINA': ('269765', '1404'),   # Substitua XXXXX pelo valor correto do checkbox
             'ARYELA': ('306997', '1209'),   # Substitua XXXXX pelo valor correto do checkbox
+            'ANGELA': ('515', '0711')
         }
         
         nome_upper = nome_patologista.upper().strip()
@@ -386,13 +387,13 @@ class ConclusaoModule(BaseModule):
             # Sempre assina com o patologista primeiro
             self.assinar_com_patologista(driver, wait, patologista, checkbox_patologista, senha_patologista)
             
-            # Se for UNIMED, também assina com George
+            # Se for UNIMED, também assina com Angela
             if is_unimed:
-                log_message("📝 Exame UNIMED - assinando também com Dr. George", "INFO")
-                info_george = self.get_patologista_info('GEORGE')
-                if info_george:
-                    checkbox_george, senha_george = info_george
-                    self.assinar_com_patologista(driver, wait, 'Dr. George', checkbox_george, senha_george)
+                log_message("📝 Exame UNIMED - assinando também com Dra. Angela", "INFO")
+                info_angela = self.get_patologista_info('ANGELA')
+                if info_angela:
+                    checkbox_angela, senha_angela = info_angela
+                    self.assinar_com_patologista(driver, wait, 'Dra. Angela', checkbox_angela, senha_angela)
             
             # Clicar no botão Assinar
             botao_assinar = wait.until(

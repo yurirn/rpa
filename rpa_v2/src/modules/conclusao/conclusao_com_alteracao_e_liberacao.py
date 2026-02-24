@@ -295,6 +295,7 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
             "MIRELLA": ("269762", "6523"),
             "MARINA": ("269765", "1404"),
             "ARYELA": ("306997", "1209"),
+            "ANGELA": ('515', '0711')
         }
 
         nome_upper = (nome_patologista or "").upper().strip()
@@ -348,11 +349,11 @@ class ConclusaoComAlteracaoELiberacaoModule(BaseModule):
             self.assinar_com_patologista(driver, wait, patologista, checkbox_patologista, senha_patologista)
 
             if is_unimed:
-                info_george = self.get_patologista_info("GEORGE")
-                if not info_george:
-                    raise Exception("George não encontrado no mapeamento")
-                checkbox_george, senha_george = info_george
-                self.assinar_com_patologista(driver, wait, "Dr. George", checkbox_george, senha_george)
+                info_angela = self.get_patologista_info("ANGELA")
+                if not info_angela:
+                    raise Exception("Angela não encontrada no mapeamento")
+                checkbox_angela, senha_angela = info_angela
+                self.assinar_com_patologista(driver, wait, "Dra. Angela", checkbox_angela, senha_angela)
 
             botao_assinar = wait.until(EC.element_to_be_clickable((By.ID, "salvarAss")))
             botao_assinar.click()
