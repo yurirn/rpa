@@ -74,6 +74,17 @@
     "has_pular_para_laudos": true
   },
   {
+    "id": "conclusao_com_codificacao_2",
+    "name": "Digitação - Conclusão com codificação",
+    "description": "",
+    "module_path": "modules.conclusao.conclusao_com_codificacao_2",
+    "requires_excel": true,
+    "tipo_busca": false,
+    "has_gera_xml_tiss": false,
+    "requires_unimed_credentials": false,
+    "has_pular_para_laudos": true
+  },
+  {
     "id": "conclusao_com_alteracao",
     "name": "Digitação - Sem liberação",
     "description": "",
