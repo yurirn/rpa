@@ -476,11 +476,15 @@ class MacroscopiaModule(BaseModule):
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
 
             try:
-                modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
+                modal_close_button = driver.find_element(By.CSS_SELECTOR,
+                                                         "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
-                    self.clicar_elemento(driver, modal_close_button)
+                    modal_close_button.click()
+                    time.sleep(1)
+                    log_message("✅ Modal de mensagem fechado", "INFO")
             except Exception:
                 pass
+
             codigos_processados = []
             for i, exame_data in enumerate(dados_exames, 1):
                 if cancel_flag and cancel_flag.is_set():

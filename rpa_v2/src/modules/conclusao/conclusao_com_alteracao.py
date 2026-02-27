@@ -301,6 +301,8 @@ class ConclusaoComAlteracaoModule(BaseModule):
                                                          "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
                     modal_close_button.click()
+                    time.sleep(1)
+                    log_message("✅ Modal de mensagem fechado", "INFO")
             except Exception:
                 pass
 

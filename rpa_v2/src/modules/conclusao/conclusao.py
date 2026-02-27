@@ -487,12 +487,14 @@ class ConclusaoModule(BaseModule):
                 driver.get("https://dap.pathoweb.com.br/moduloExame/index")
                 time.sleep(2)
                 log_message("🔄 Navegação direta para módulo realizada (fallback)", "INFO")
-            
+
             # Fechar modal se aparecer
             try:
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
                     modal_close_button.click()
+                    time.sleep(1)
+                    log_message("✅ Modal de mensagem fechado", "INFO")
             except Exception:
                 pass
 
@@ -596,6 +598,7 @@ class ConclusaoModule(BaseModule):
                             if modal_close_button.is_displayed():
                                 modal_close_button.click()
                                 time.sleep(1)
+                                log_message("✅ Modal de mensagem fechado", "INFO")
                         except Exception:
                             pass
                         
