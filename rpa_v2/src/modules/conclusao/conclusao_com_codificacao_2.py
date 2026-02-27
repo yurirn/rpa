@@ -82,11 +82,12 @@ class ConclusaoModule(BaseModule):
         except Exception as e:
             raise Exception(f"Erro ao ler planilha: {e}")
 
-    def carregar_codificacao(self):
+    def carregar_codificacao(self, codificacao_path=None):
         """Carrega a planilha de codificação e cria um dicionário mascara -> grupo"""
         try:
-            codificacao_path = os.path.join(os.path.dirname(__file__), '..', '..', 'utils', 'codificacao-robo.xlsx')
-            codificacao_path = os.path.normpath(codificacao_path)
+            if not codificacao_path:
+                codificacao_path = os.path.join(os.path.dirname(__file__), '..', '..', 'utils', 'codificacao-robo.xlsx')
+                codificacao_path = os.path.normpath(codificacao_path)
             log_message(f"📂 Carregando planilha de codificação: {codificacao_path}", "INFO")
 
             workbook = load_workbook(codificacao_path)
@@ -362,6 +363,7 @@ class ConclusaoModule(BaseModule):
             'MIRELLA': ('269762', '6523'),  # Substitua XXXXX pelo valor correto do checkbox
             'MARINA': ('269765', '1404'),   # Substitua XXXXX pelo valor correto do checkbox
             'ARYELA': ('306997', '1209'),   # Substitua XXXXX pelo valor correto do checkbox
+            "ANGELA": ('515', '0711')
         }
         
         nome_upper = nome_patologista.upper().strip()
@@ -414,13 +416,13 @@ class ConclusaoModule(BaseModule):
             # Sempre assina com o patologista primeiro
             self.assinar_com_patologista(driver, wait, patologista, checkbox_patologista, senha_patologista)
             
-            # Se for UNIMED, também assina com George
+            # Se for UNIMED, também assina com Angela
             if is_unimed:
-                log_message("📝 Exame UNIMED - assinando também com Dr. George", "INFO")
-                info_george = self.get_patologista_info('GEORGE')
-                if info_george:
-                    checkbox_george, senha_george = info_george
-                    self.assinar_com_patologista(driver, wait, 'Dr. George', checkbox_george, senha_george)
+                log_message("📝 Exame UNIMED - assinando também com Dra. Angela", "INFO")
+                info_angela = self.get_patologista_info('ANGELA')
+                if info_angela:
+                    checkbox_angela, senha_angela = info_angela
+                    self.assinar_com_patologista(driver, wait, 'Dra. Angela', checkbox_angela, senha_angela)
             
             # Clicar no botão Assinar
             botao_assinar = wait.until(
@@ -438,6 +440,7 @@ class ConclusaoModule(BaseModule):
         username = params.get("username")
         password = params.get("password")
         excel_file = params.get("excel_file")
+        codificacao_file = params.get("codificacao_file")
         cancel_flag = params.get("cancel_flag")
         headless_mode = params.get("headless_mode", False)
         pular_para_laudos = params.get("pular_para_laudos", False)
@@ -452,7 +455,7 @@ class ConclusaoModule(BaseModule):
             log_message(f"Encontrados {len(dados_exames)} exames para processar", "INFO")
 
             # Carregar planilha de codificação
-            self.codificacao_map = self.carregar_codificacao()
+            self.codificacao_map = self.carregar_codificacao(codificacao_file)
 
             # Se opção pular para laudos estiver ativa, mostrar mensagem
             if pular_para_laudos:

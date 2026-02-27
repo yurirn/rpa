@@ -1895,6 +1895,8 @@ class MacroGastricaModule(BaseModule):
                 modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
                 if modal_close_button.is_displayed():
                     modal_close_button.click()
+                    time.sleep(1)
+                    log_message("✅ Modal de mensagem fechado", "INFO")
             except Exception:
                 pass
 
@@ -2035,6 +2037,16 @@ class MacroGastricaModule(BaseModule):
             # Verificar se a sessão do browser ainda está ativa
             if not self.verificar_sessao_browser(driver):
                 raise Exception("Sessão do browser perdida - necessário reiniciar")
+            
+            # Fechar modal de mensagem se estiver aberto (bloqueia interação com a página)
+            try:
+                modal_close_button = driver.find_element(By.CSS_SELECTOR, "#mensagemParaClienteModal .modal-footer button")
+                if modal_close_button.is_displayed():
+                    modal_close_button.click()
+                    time.sleep(1)
+                    log_message("✅ Modal de mensagem fechado antes de processar exame", "INFO")
+            except Exception:
+                pass
             
             # Aguardar e encontrar o campo de código de barras diretamente pelo placeholder (mais confiável)
             def localizar_campo_codigo():

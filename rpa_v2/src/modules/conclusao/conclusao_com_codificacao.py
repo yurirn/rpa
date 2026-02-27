@@ -328,6 +328,7 @@ class ConclusaoModule(BaseModule):
             'MIRELLA': ('269762', '6523'),  # Substitua XXXXX pelo valor correto do checkbox
             'MARINA': ('269765', '1404'),  # Substitua XXXXX pelo valor correto do checkbox
             'ARYELA': ('306997', '1209'),  # Substitua XXXXX pelo valor correto do checkbox
+            'ANGELA': ('515', '0711')
         }
 
         nome_upper = nome_patologista.upper().strip()
@@ -371,14 +372,14 @@ class ConclusaoModule(BaseModule):
             log_message("📋 Modal de assinatura aberto", "INFO")
 
             # Obter informações do patologista
-            info_patologista = self.get_patologista_info('GEORGE')
+            info_patologista = self.get_patologista_info('ANGELA')
             if not info_patologista:
-                raise Exception(f"Patologista GEORGE não encontrado no sistema")
+                raise Exception(f"Patologista ANGELA não encontrada no sistema")
 
             checkbox_patologista, senha_patologista = info_patologista
 
-            # Sempre assina com o patologista primeiro
-            self.assinar_com_patologista(driver, wait, 'Dr. George', checkbox_patologista, senha_patologista)
+            # Sempre assina com a patologista primeiro
+            self.assinar_com_patologista(driver, wait, 'Dra. Angela', checkbox_patologista, senha_patologista)
 
             # Clicar no botão Assinar
             botao_assinar = wait.until(

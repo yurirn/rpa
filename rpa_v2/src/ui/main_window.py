@@ -29,6 +29,7 @@ class MainWindow:
         self.show_password = tk.BooleanVar(value=False)
         self.save_credentials = tk.BooleanVar(value=False)
         self.excel_file_path = tk.StringVar()
+        self.codificacao_file_path = tk.StringVar()
         self.tipo_busca = tk.StringVar(value="numero_exame")
         self.gera_xml_tiss = tk.StringVar(value="sim")
         self.headless_mode = tk.BooleanVar(value=True)
@@ -165,6 +166,7 @@ class MainWindow:
         has_cobrar_de = module.get("has_cobrar_de") if module else False
         has_pular_para_laudos = module.get("has_pular_para_laudos") if module else False
         has_data_tipo = module.get("has_data_tipo") if module else False
+        requires_codificacao = module.get("requires_codificacao") if module else False
 
         # Armazenar referências dos módulos para uso posterior
         self.current_module_config = {
@@ -175,7 +177,8 @@ class MainWindow:
             'requires_hospital_credentials': module.get("requires_hospital_credentials") if module else False,
             'has_cobrar_de': has_cobrar_de,
             'has_pular_para_laudos': has_pular_para_laudos,
-            'has_data_tipo': has_data_tipo
+            'has_data_tipo': has_data_tipo,
+            'requires_codificacao': requires_codificacao
         }
 
         row = 0
@@ -185,6 +188,13 @@ class MainWindow:
             entry = ttk.Entry(self.params_frame, textvariable=self.excel_file_path)
             entry.grid(row=row, column=1, sticky="ew", padx=(0, 10))
             ttk.Button(self.params_frame, text="Selecionar", command=self.select_excel_file).grid(row=row, column=2)
+            row += 1
+        if requires_codificacao:
+            self.params_frame.columnconfigure(1, weight=1)
+            ttk.Label(self.params_frame, text="Planilha Codificação:").grid(row=row, column=0, sticky="w")
+            entry_cod = ttk.Entry(self.params_frame, textvariable=self.codificacao_file_path)
+            entry_cod.grid(row=row, column=1, sticky="ew", padx=(0, 10))
+            ttk.Button(self.params_frame, text="Selecionar", command=self.select_codificacao_file).grid(row=row, column=2)
             row += 1
         if tipo_busca:
             ttk.Label(self.params_frame, text="Tipo de Busca:").grid(row=row, column=0, sticky="w", pady=(15, 5))
@@ -364,6 +374,11 @@ class MainWindow:
         if file_path:
             self.excel_file_path.set(file_path)
 
+    def select_codificacao_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[["Excel files", "*.xlsx"]])
+        if file_path:
+            self.codificacao_file_path.set(file_path)
+
     def create_control_buttons(self, parent):
         frame = ttk.Frame(parent)
         frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 10))
@@ -461,6 +476,12 @@ class MainWindow:
                 "excel_file": excel_path,
                 "modo_busca": "exame" if self.tipo_busca.get() == "numero_exame" else "guia"
             })
+        if module.get("requires_codificacao"):
+            codificacao_path = self.codificacao_file_path.get()
+            if not os.path.exists(codificacao_path):
+                messagebox.showerror("Erro", "Planilha de codificação não encontrada!")
+                return
+            params["codificacao_file"] = codificacao_path
         if module.get("has_gera_xml_tiss"):
             params["gera_xml_tiss"] = self.gera_xml_tiss.get()
         if module.get("has_cobrar_de"):

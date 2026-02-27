@@ -79,6 +79,7 @@
     "description": "",
     "module_path": "modules.conclusao.conclusao_com_codificacao_2",
     "requires_excel": true,
+    "requires_codificacao": true,
     "tipo_busca": false,
     "has_gera_xml_tiss": false,
     "requires_unimed_credentials": false,
